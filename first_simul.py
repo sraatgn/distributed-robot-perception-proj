@@ -7,55 +7,60 @@ from scipy.linalg import sqrtm
 class Drone:
     def __init__(self, id, x0, P0, F, G, Q, H, R):
         self.id = id
-        self.x = x0
-        self.P = P0
-        self.F = F
-        self.G = G
-        self.Q = Q
-        self.H = H
-        self.R = R
-        self.U = np.eye(F.shape[0])
-        self.neighbors = []
-        self.active = True
-        self.positions = [x0[:2]]  # To store positions for plotting
-        self.true_positions = [x0[:2]]  # To store true positions for error calculation
+        self.x = x0  # Stato iniziale
+        self.P = P0  # Covarianza iniziale
+        self.F = F  # Matrice di transizione di stato
+        self.G = G  # Matrice di controllo
+        self.Q = Q  # Covarianza del rumore di processo
+        self.H = H  # Matrice di osservazione
+        self.R = R  # Covarianza del rumore di osservazione
+        self.U = np.eye(F.shape[0])  # Matrice di transizione di stato iniziale
+        self.neighbors = []  # Lista dei vicini
+        self.active = True  # Stato attivo del drone
+        self.positions = [x0[:2]]  # Posizioni stimate per il plotting
+        self.true_positions = [x0[:2]]  # Posizioni vere per il calcolo dell'errore
 
     def predict(self, u):
         if not self.active:
             return
+        # Propagazione dello stato
         self.x = self.F @ self.x + u
+        # Propagazione della covarianza
         self.P = self.F @ self.P @ self.F.T + self.G @ self.Q @ self.G.T
+        # Aggiornamento della matrice di transizione di stato
         self.U = self.F @ self.U
+        # Memorizzazione delle posizioni per il plotting
         self.positions.append(self.x[:2])
-        self.true_positions.append(self.x[:2] + np.random.normal(0, 0.1, size=2))  # Simulate true positions with some noise
+        self.true_positions.append(self.x[:2] + np.random.normal(0, 0.1, size=2))  # Simulazione delle posizioni vere con rumore
 
     def update(self, z, H_rel, R_rel, other_drone):
         if not self.active or not other_drone.active:
             return
 
-        # Calculate ra
+        # Stato combinato dei due droni
         combined_state = np.concatenate((self.x, other_drone.x))
+        # Calcolo dell'errore di misurazione relativo
         ra = z - H_rel @ combined_state
 
-        # Calculate Sab
+        # Covarianza combinata
         P_combined = np.block([[self.P, np.zeros_like(self.P)], [np.zeros_like(self.P), other_drone.P]])
+        # Calcolo della covarianza dell'innovazione
         Sab = R_rel + H_rel @ P_combined @ H_rel.T
 
-        # Calculate Γa and Γb
-        #Sab_inv = np.linalg.inv(Sab)
+        # Calcolo delle matrici di aggiornamento
         S_ab_inv_sqrt = np.linalg.inv(sqrtm(Sab))
         Γ_combined = P_combined @ H_rel.T @ S_ab_inv_sqrt
         Γa = Γ_combined[:self.P.shape[0], :]
         Γb = Γ_combined[self.P.shape[0]:, :]
 
-        # Update states and covariances
+        # Aggiornamento dello stato e della covarianza per entrambi i droni
         self.x = self.x + Γa @ ra
         other_drone.x = other_drone.x + Γb @ ra
 
         self.P = self.P - Γa @ H_rel[:, :self.P.shape[0]] @ self.P
         other_drone.P = other_drone.P - Γb @ H_rel[:, self.P.shape[0]:] @ other_drone.P
 
-        # Prepare update message
+        # Preparazione del messaggio di aggiornamento
         update_message = {
             "a": self.id,
             "b": other_drone.id,
@@ -67,7 +72,7 @@ class Drone:
             "Sab": Sab
         }
 
-        # Broadcast update message to other agents
+        # Trasmissione del messaggio di aggiornamento agli altri droni
         self.broadcast_update(update_message)
 
     def broadcast_update(self, update_message):
@@ -76,19 +81,19 @@ class Drone:
                 neighbor.process_update(update_message)
 
     def process_update(self, update_message):
-        # Extract data from the update message
+        # Estrazione dei dati dal messaggio di aggiornamento
         ra = update_message["ra"]
         Γa = update_message["Γa"]
         Γb = update_message["Γb"]
         Sab = update_message["Sab"]
         S_ab_inv_sqrt = np.linalg.inv(sqrtm(Sab))
 
-        # Calculate Γj
+        # Calcolo della matrice di aggiornamento per gli altri droni
         Γj_a = self.P @ (Γa @ S_ab_inv_sqrt)
         Γj_b = self.P @ (Γb @ S_ab_inv_sqrt)
         Γj = Γj_a - Γj_b
 
-        # Update state and covariance
+        # Aggiornamento dello stato e della covarianza
         self.x = self.x + Γj @ ra
         self.P = self.P - Γj @ Sab @ Γj.T
 
@@ -129,12 +134,14 @@ def calculate_detection_metrics(drones, fire_positions):
     return precision, recall, f1
 
 def simulate_fire_detection():
+    # Parametri del modello
     F = np.array([[1, 0, 0.1, 0], [0, 1, 0, 0.1], [0, 0, 1, 0], [0, 0, 0, 1]])
     G = np.eye(4)
     Q = 0.1 * np.eye(4)
     H = np.array([[1, 0, 0, 0], [0, 1, 0, 0]])
     R = 0.1 * np.eye(2)
 
+    # Inizializzazione dei droni
     x0_1 = np.array([0, 0, 0, 0])
     P0_1 = 0.1 * np.eye(4)
     x0_2 = np.array([10, 10, 0, 0])
@@ -162,7 +169,7 @@ def simulate_fire_detection():
 
         if k % 2 == 0:
             H_rel = np.block([[-H, H]])
-            z = np.array([1, 1])  # Example measurement
+            z = np.array([1, 1])  # Misurazione di esempio
             R_rel = 0.1 * np.eye(2)
             for i in range(len(drones)):
                 for j in range(i + 1, len(drones)):
@@ -173,7 +180,7 @@ def simulate_fire_detection():
                             print(f"Drone {drone.id} state: {drone.x}, covariance: {drone.P}")
 
         for drone in drones:
-            z = drone.H @ drone.x  # Example measurement
+            z = drone.H @ drone.x  # Misurazione di esempio
             if drone.detect_fire(z):
                 print(f"Fire detected by Drone {drone.id} at position {drone.x[:2]}")
                 fire_positions.append(drone.x[:2])
@@ -186,7 +193,6 @@ def simulate_fire_detection():
             print("Simulating recovery for Drone 2")
             drone2.active = True
 
-    #plot_simulation(drones, fire_positions)
     animate_simulation(drones, fire_positions)
 
     rmse = calculate_rmse(drones)
@@ -215,8 +221,8 @@ def plot_simulation(drones, fire_positions):
 
 def animate_simulation(drones, fire_positions):
     fig, ax = plt.subplots()
-    ax.set_xlim(0, 20)  # Adjust according to the simulation boundaries
-    ax.set_ylim(0, 20)  # Adjust according to the simulation boundaries
+    ax.set_xlim(0, 30)  # Adjust according to the simulation boundaries
+    ax.set_ylim(0, 30)  # Adjust according to the simulation boundaries
     ax.set_xlabel('X Position')
     ax.set_ylabel('Y Position')
     ax.set_title('Drone Fire Detection Simulation')
@@ -241,21 +247,20 @@ def animate_simulation(drones, fire_positions):
             positions = np.array(drone.positions[:frame])
             if positions.size > 0:
                 line.set_data(positions[:, 0], positions[:, 1])
-                final_pos.set_offsets([positions[-1]])
-        
+                final_pos.set_offsets(positions[-1].reshape(1, 2))
+
         if fire_positions:
-            fire_positions_arr = np.array(fire_positions[:frame])
+            fire_positions_arr = np.array(fire_positions)
             fire_scatter.set_offsets(fire_positions_arr)
 
         return lines + final_positions + [fire_scatter]
 
     ani = animation.FuncAnimation(
         fig, update, frames=range(1, max(len(drone.positions) for drone in drones) + 1),
-        init_func=init, blit=True, repeat=True, interval=300
+        init_func=init, blit=True, repeat=True, interval=500
     )
 
     plt.show()
-
 
 if __name__ == "__main__":
     simulate_fire_detection()
