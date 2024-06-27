@@ -42,33 +42,53 @@ class Drone:
         # Calcolo dell'errore di misurazione relativo
         ra = z - H_rel @ combined_state
 
-        # Covarianza combinata
+        # Covarianza combinata (blocco diagonale con covarianze dei due droni)
         P_combined = np.block([[self.P, np.zeros_like(self.P)], [np.zeros_like(self.P), other_drone.P]])
-        # Calcolo della covarianza dell'innovazione
-        Sab = R_rel + H_rel @ P_combined @ H_rel.T
 
-        # Calcolo delle matrici di aggiornamento
-        S_ab_inv_sqrt = np.linalg.inv(sqrtm(Sab))
-        Γ_combined = P_combined @ H_rel.T @ S_ab_inv_sqrt
-        Γa = Γ_combined[:self.P.shape[0], :]
-        Γb = Γ_combined[self.P.shape[0]:, :]
+        # Definizione delle matrici di osservazione relative
+        Ha = H_rel[:, :self.P.shape[0]]  # Estrarre la parte di H_rel corrispondente al drone a
+        Hb = H_rel[:, self.P.shape[0]:]  # Estrarre la parte di H_rel corrispondente al drone b
+
+        # Matrici di transizione di stato (per esempio, identità se non altrimenti definite)
+        Phi_a = np.eye(self.P.shape[0])
+        Phi_b = np.eye(other_drone.P.shape[0])
+
+        # Matrice di cross-covarianza Pi_ab (assumiamo una definizione appropriata o calcolabile)
+        Pi_ab = np.zeros((self.P.shape[0], other_drone.P.shape[0]))  # Placeholder
+
+        # Calcolo della covarianza dell'innovazione S_{ab} con la sottrazione inclusa
+        Sab = (R_rel + Ha @ self.P @ Ha.T + Hb @ other_drone.P @ Hb.T
+               - Ha @ Phi_a @ Pi_ab @ Phi_b.T @ Hb.T)
+
+        # Aggiungi una piccola perturbazione alla diagonale di Sab se non è positiva definita
+        while np.any(np.linalg.eigvals(Sab) <= 0):
+            Sab += np.eye(Sab.shape[0]) * 1e-6
+
+        # Assicurati che Sab sia reale e positiva definita
+        S_ab_inv_sqrt = np.linalg.inv(np.real(sqrtm(Sab)))
+
+        # Formula per Gamma_a
+        Gamma_a = (np.linalg.inv(Phi_a) @ Phi_a @ Pi_ab @ Phi_b @ Hb.T - np.linalg.inv(Phi_a) @ self.P @ Ha.T) @ S_ab_inv_sqrt
+
+        # Formula per Gamma_b
+        Gamma_b = (np.linalg.inv(Phi_b) @ other_drone.P @ Hb.T - Pi_ab @ Phi_a @ Ha.T) @ S_ab_inv_sqrt
 
         # Aggiornamento dello stato e della covarianza per entrambi i droni
-        self.x = self.x + Γa @ ra
-        other_drone.x = other_drone.x + Γb @ ra
+        self.x = self.x + Gamma_a @ ra
+        other_drone.x = other_drone.x + Gamma_b @ ra
 
-        self.P = self.P - Γa @ H_rel[:, :self.P.shape[0]] @ self.P
-        other_drone.P = other_drone.P - Γb @ H_rel[:, self.P.shape[0]:] @ other_drone.P
+        self.P = self.P - Gamma_a @ Ha @ self.P
+        other_drone.P = other_drone.P - Gamma_b @ Hb @ other_drone.P
 
         # Preparazione del messaggio di aggiornamento
         update_message = {
             "a": self.id,
             "b": other_drone.id,
             "ra": ra,
-            "Γa": Γa,
-            "Γb": Γb,
-            "Φa": self.P,
-            "Φb": other_drone.P,
+            "Gamma_a": Gamma_a,
+            "Gamma_b": Gamma_b,
+            "Phi_a": self.P,
+            "Phi_b": other_drone.P,
             "Sab": Sab
         }
 
@@ -83,19 +103,19 @@ class Drone:
     def process_update(self, update_message):
         # Estrazione dei dati dal messaggio di aggiornamento
         ra = update_message["ra"]
-        Γa = update_message["Γa"]
-        Γb = update_message["Γb"]
+        Gamma_a = update_message["Gamma_a"]
+        Gamma_b = update_message["Gamma_b"]
         Sab = update_message["Sab"]
-        S_ab_inv_sqrt = np.linalg.inv(sqrtm(Sab))
+        S_ab_inv_sqrt = np.linalg.inv(np.real(sqrtm(Sab)))
 
         # Calcolo della matrice di aggiornamento per gli altri droni
-        Γj_a = self.P @ (Γa @ S_ab_inv_sqrt)
-        Γj_b = self.P @ (Γb @ S_ab_inv_sqrt)
-        Γj = Γj_a - Γj_b
+        Gamma_j_a = self.P @ (Gamma_a @ S_ab_inv_sqrt)
+        Gamma_j_b = self.P @ (Gamma_b @ S_ab_inv_sqrt)
+        Gamma_j = Gamma_j_a - Gamma_j_b
 
         # Aggiornamento dello stato e della covarianza
-        self.x = self.x + Γj @ ra
-        self.P = self.P - Γj @ Sab @ Γj.T
+        self.x = self.x + Gamma_j @ ra
+        self.P = self.P - Gamma_j @ Sab @ Gamma_j.T
 
     def check_sensor(self, z):
         if not self.active:
