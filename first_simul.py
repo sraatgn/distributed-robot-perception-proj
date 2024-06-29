@@ -40,45 +40,30 @@ class Drone:
         # Stato combinato dei due droni
         combined_state = np.concatenate((self.x, other_drone.x))
         # Calcolo dell'errore di misurazione relativo
-        ra = z - H_rel @ combined_state
+        ra = z - H_rel @ combined_state  # Innovation
 
         # Covarianza combinata (blocco diagonale con covarianze dei due droni)
         P_combined = np.block([[self.P, np.zeros_like(self.P)], [np.zeros_like(self.P), other_drone.P]])
 
-        # Definizione delle matrici di osservazione relative
-        Ha = H_rel[:, :self.P.shape[0]]  # Estrarre la parte di H_rel corrispondente al drone a
-        Hb = H_rel[:, self.P.shape[0]:]  # Estrarre la parte di H_rel corrispondente al drone b
+        # Covarianza dell'innovazione
+        Sab = R_rel + H_rel @ P_combined @ H_rel.T
 
-        # Matrici di transizione di stato (per esempio, identità se non altrimenti definite)
-        Phi_a = np.eye(self.P.shape[0])
-        Phi_b = np.eye(other_drone.P.shape[0])
-
-        # Matrice di cross-covarianza Pi_ab (assumiamo una definizione appropriata o calcolabile)
-        Pi_ab = np.zeros((self.P.shape[0], other_drone.P.shape[0]))  # Placeholder
-
-        # Calcolo della covarianza dell'innovazione S_{ab} con la sottrazione inclusa
-        Sab = (R_rel + Ha @ self.P @ Ha.T + Hb @ other_drone.P @ Hb.T
-               - Ha @ Phi_a @ Pi_ab @ Phi_b.T @ Hb.T)
-
-        # Aggiungi una piccola perturbazione alla diagonale di Sab se non è positiva definita
         while np.any(np.linalg.eigvals(Sab) <= 0):
             Sab += np.eye(Sab.shape[0]) * 1e-6
 
-        # Assicurati che Sab sia reale e positiva definita
         S_ab_inv_sqrt = np.linalg.inv(np.real(sqrtm(Sab)))
 
-        # Formula per Gamma_a
-        Gamma_a = (np.linalg.inv(Phi_a) @ Phi_a @ Pi_ab @ Phi_b @ Hb.T - np.linalg.inv(Phi_a) @ self.P @ Ha.T) @ S_ab_inv_sqrt
+        # Kalman Gain
+        Gamma_a = self.P @ H_rel[:, :self.P.shape[0]].T @ S_ab_inv_sqrt.T
+        Gamma_b = other_drone.P @ H_rel[:, self.P.shape[0]:].T @ S_ab_inv_sqrt.T
 
-        # Formula per Gamma_b
-        Gamma_b = (np.linalg.inv(Phi_b) @ other_drone.P @ Hb.T - Pi_ab @ Phi_a @ Ha.T) @ S_ab_inv_sqrt
-
-        # Aggiornamento dello stato e della covarianza per entrambi i droni
+        # State update
         self.x = self.x + Gamma_a @ ra
         other_drone.x = other_drone.x + Gamma_b @ ra
 
-        self.P = self.P - Gamma_a @ Ha @ self.P
-        other_drone.P = other_drone.P - Gamma_b @ Hb @ other_drone.P
+        # Covariance update
+        self.P = self.P - Gamma_a @ Sab @ Gamma_a.T
+        other_drone.P = other_drone.P - Gamma_b @ Sab @ Gamma_b.T
 
         # Preparazione del messaggio di aggiornamento
         update_message = {
