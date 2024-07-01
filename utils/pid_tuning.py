@@ -1,9 +1,7 @@
 import numpy as np
 from itertools import product
-
-import sys
-sys.path.append('../src')
-from pid_controller import PIDController
+from src.drone import Drone
+from src.pid_controller import  PIDController
 
 def simulate_drone_with_pid(pid, target, num_steps=100, dt=0.1):
     F = np.array([[1, 0, 0.1, 0], [0, 1, 0, 0.1], [0, 0, 1, 0], [0, 0, 0, 1]])
