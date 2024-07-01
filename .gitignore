@@ -1,4 +1,7 @@
 robotenv/
+utils/__pychache__/
+src/__pychache__/
+
 
 .DS_store
 
