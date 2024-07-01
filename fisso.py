@@ -3,12 +3,16 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from sklearn.metrics import precision_score, recall_score, f1_score
 from scipy.linalg import sqrtm
+from itertools import product
+
+random.seed(123)
 
 class PIDController:
+    ''' Returns PID control output '''
     def __init__(self, Kp, Ki, Kd):
-        self.Kp = Kp
-        self.Ki = Ki
-        self.Kd = Kd
+        self.Kp = Kp    # proportional gain
+        self.Ki = Ki    # integral gain
+        self.Kd = Kd    # derivative gain
         self.integral = np.zeros(2)
         self.prev_error = np.zeros(2)
 
@@ -153,6 +157,45 @@ def calculate_detection_metrics(drones, fire_position):
     f1 = f1_score(y_true, y_pred)
     return precision, recall, f1
 
+def simulate_drone_with_pid(pid, target, num_steps=100, dt=0.1):
+    F = np.array([[1, 0, 0.1, 0], [0, 1, 0, 0.1], [0, 0, 1, 0], [0, 0, 0, 1]])
+    G = np.eye(4)
+    Q = 0.1 * np.eye(4)
+    H = np.array([[1, 0, 0, 0], [0, 1, 0, 0]])
+    R = 0.1 * np.eye(2)
+    x0 = np.array([0, 0, 0, 0])
+    P0 = 0.1 * np.eye(4)
+
+    drone = Drone(1, x0, P0, F, G, Q, H, R, pid)
+    mse = 0
+
+    for _ in range(num_steps):
+        current_position = drone.positions[-1]
+        error = target - current_position
+        control_output = pid.compute(error, dt)
+        u = np.zeros(4)
+        u[:2] = control_output
+        drone.predict(u)
+        mse += np.sum(error ** 2)
+
+    mse /= num_steps
+    return mse
+
+def grid_search_pid(target, Kp_values, Ki_values, Kd_values, num_steps=100, dt=0.1):
+    best_params = None
+    best_mse = float('inf')
+
+    for Kp, Ki, Kd in product(Kp_values, Ki_values, Kd_values):
+        pid = PIDController(Kp, Ki, Kd)
+        mse = simulate_drone_with_pid(pid, target, num_steps, dt)
+        if mse < best_mse:
+            best_mse = mse
+            best_params = (Kp, Ki, Kd)
+        print(f"Tested Kp={Kp}, Ki={Ki}, Kd={Kd}, MSE={mse}")
+
+    return best_params, best_mse
+
+
 def simulate_fire_detection():
     # Parametri del modello
     F = np.array([[1, 0, 0.1, 0], [0, 1, 0, 0.1], [0, 0, 1, 0], [0, 0, 0, 1]])
@@ -162,10 +205,13 @@ def simulate_fire_detection():
     R = 0.1 * np.eye(2)
 
     # Parametri del PID Controller
-    Kp = 1.0
-    Ki = 0.1
-    Kd = 0.05
-    pid_controller = PIDController(Kp, Ki, Kd)
+    target = np.array([15, 15]) # fire
+    Kp_values = np.arange(0.5, 1.5, 0.5)
+    Ki_values = np.arange(0.05, 0.15, 0.05)
+    Kd_values = np.arange(0.02, 0.07, 0.02)
+    best_params, best_mse = grid_search_pid(target, Kp_values, Ki_values, Kd_values)
+    print(f"Best PID parameters: Kp={best_params[0]}, Ki={best_params[1]}, Kd={best_params[2]}, MSE={best_mse}")
+    pid_controller = PIDController(*best_params)
 
     # Inizializzazione dei droni con posizioni casuali
     x0_1 = np.array([np.random.uniform(0, 30), np.random.uniform(0, 30), 0, 0])
@@ -235,6 +281,7 @@ def simulate_fire_detection():
 
     print(f"RMSE: {rmse}")
     print(f"Precision: {precision}, Recall: {recall}, F1 Score: {f1}")
+    print(f"PID best parameters selected: Kp={best_params[0]}, Ki={best_params[1]}, Kd={best_params[2]}, MSE={best_mse}")
 
 def plot_simulation(drones, fire_position):
     plt.figure()
