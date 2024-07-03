@@ -15,6 +15,8 @@ from utils.pid_tuning import simulate_drone_with_pid, grid_search_pid
 random.seed(123)
 
 def simulate_fire_detection():
+    measurements_history = []
+
     # Parametri del modello
     F = np.array([[1, 0, 0.1, 0], [0, 1, 0, 0.1], [0, 0, 1, 0], [0, 0, 0, 1]])
     G = np.eye(4)
@@ -53,11 +55,16 @@ def simulate_fire_detection():
     fire_position = np.array([15, 15])  # Posizione fissa del fuoco
 
     dt = 1.0  # Tempo tra i passi della simulazione
-    for k in range(10):  # Estensione del numero di iterazioni per avvicinarsi al fuoco
+    for k in range(30):  # Estensione del numero di iterazioni per avvicinarsi al fuoco
         for drone in drones:
-            # Calcolo dell'errore e del controllo PID per avvicinarsi al fuoco
-            error = fire_position - drone.x[:2]
-            u = np.hstack((drone.pid_controller.compute(error, dt), [0, 0]))  # Movimento verso il fuoco
+            # Random movement control input
+            random_direction = np.random.uniform(-1, 1, 2)
+            u = np.hstack((random_direction, [0, 0]))
+            # # Calcolo dell'errore e del controllo PID per avvicinarsi al fuoco
+            # error = fire_position - drone.x[:2]
+            # if np.linalg.norm(error) < 1.0:  # Dead zone of 1 unit around the target
+            #     error = np.zeros(2)
+            # u = np.hstack((drone.pid_controller.compute(error, dt), [0, 0]))  # Movimento verso il fuoco
 
             # Componente di repulsione per evitare collisioni
             repulsion = np.zeros(2)
@@ -68,17 +75,37 @@ def simulate_fire_detection():
 
             drone.predict(u)
 
-        if k % 2 == 0:
-            H_rel = np.block([[-H, H]])
-            z = np.array([1, 1])  # Misurazione di esempio
-            R_rel = 0.1 * np.eye(2)
-            for i in range(len(drones)):
-                for j in range(i + 1, len(drones)):
-                    if drones[i].check_sensor(z) and drones[j].check_sensor(z):
-                        drones[i].update(z, H_rel, R_rel, drones[j])
-                        print(f"Update at step {k} between Drone {drones[i].id} and Drone {drones[j].id}")
-                        for drone in drones:
-                            print(f"Drone {drone.id} state: {drone.x}, covariance: {drone.P}")
+        #if k % 2 == 0:
+        H_rel = np.block([[-H, H]])
+        z = np.array([1, 1])  # Misurazione di esempio
+        R_rel = 0.1 * np.eye(2)
+        sensing_range = 10  # Define the sensing range
+        measurement_taken = False
+
+        for i in range(len(drones)):
+            for j in range(i + 1, len(drones)):
+                distance = np.linalg.norm(drones[i].x[:2] - drones[j].x[:2])
+                if distance < sensing_range:
+                    # Example measurement as the midpoint
+                    z = (drones[i].x[:2] + drones[j].x[:2]) / 2 
+                    # Become interim master 
+                    interim_master = drones[i]
+                    interim_master.update(z, H_rel, R_rel, drones[j])
+                    print(f"Update at step {k} between Drone {drones[i].id} and Drone {drones[j].id}")
+                    # Update for all other drones
+                    for drone in drones:
+                        if drone.id != interim_master.id:
+                            interim_master.update(z, H_rel, R_rel, drone)
+                    measurement_taken = True
+                    measurements_history.append(f"Measurement at step {k} between Drone {drones[i].id} and Drone {drones[j].id} ")
+                    break
+            if measurement_taken:
+                # no more than one interim master per iteration
+                break
+
+        if not measurement_taken:
+            for drone in drones:
+                pass # update = prediction
 
         for drone in drones:
             if drone.detect_fire(fire_position):
@@ -100,6 +127,10 @@ def simulate_fire_detection():
     print(f"RMSE: {rmse}")
     print(f"Precision: {precision}, Recall: {recall}, F1 Score: {f1}")
     print(f"PID best parameters selected: Kp={best_params[0]}, Ki={best_params[1]}, Kd={best_params[2]}, MSE={best_mse}")
+    print("---------------------------------------")
+    for m in measurements_history:
+        print(m)
+
 
 if __name__ == "__main__":
     simulate_fire_detection()
