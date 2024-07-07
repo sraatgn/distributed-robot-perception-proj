@@ -5,16 +5,25 @@ from sklearn.metrics import precision_score, recall_score, f1_score
 from scipy.linalg import sqrtm
 from itertools import product
 import random
+from IPython import embed
 
 from src.drone import Drone
 from src.pid_controller import PIDController
 from utils.metrics import calculate_rmse, calculate_detection_metrics
 from utils.plotting import plot_simulation, animate_simulation
 from utils.pid_tuning import simulate_drone_with_pid, grid_search_pid
+import utils.formation as formation
 
 random.seed(123)
 
-def simulate_fire_detection():
+def simulate_fire_detection(
+    num_agents=4,
+    sensing_range=5,
+    num_iterations=30,
+    formation_type='circle',
+    formation_radius=5
+):
+
     measurements_history = []
 
     # Parametri del modello
@@ -33,53 +42,46 @@ def simulate_fire_detection():
     print(f"Best PID parameters: Kp={best_params[0]}, Ki={best_params[1]}, Kd={best_params[2]}, MSE={best_mse}")
     pid_controller = PIDController(*best_params)
 
-    # Inizializzazione dei droni con posizioni casuali
-    x0_1 = np.array([np.random.uniform(0, 30), np.random.uniform(0, 30), 0, 0])
-    P0_1 = 0.1 * np.eye(4)
-    x0_2 = np.array([np.random.uniform(0, 30), np.random.uniform(0, 30), 0, 0])
-    P0_2 = 0.1 * np.eye(4)
-    x0_3 = np.array([np.random.uniform(0, 30), np.random.uniform(0, 30), 0, 0])
-    P0_3 = 0.1 * np.eye(4)
-    x0_4 = np.array([np.random.uniform(0, 30), np.random.uniform(0, 30), 0, 0])
-    P0_4 = 0.1 * np.eye(4)
+    # Inizializzazione droni (state x and covariance P)
+    initial_positions = [np.array([np.random.uniform(0, 30), np.random.uniform(0, 30), 0, 0]) for _ in range(num_agents)]
+    initial_covariances = [0.1 * np.eye(num_agents) for _ in range(num_agents)]
 
-    drone1 = Drone(1, x0_1, P0_1, F, G, Q, H, R, pid_controller)
-    drone2 = Drone(2, x0_2, P0_2, F, G, Q, H, R, pid_controller)
-    drone3 = Drone(3, x0_3, P0_3, F, G, Q, H, R, pid_controller)
-    drone4 = Drone(4, x0_4, P0_4, F, G, Q, H, R, pid_controller)
-
-    drones = [drone1, drone2, drone3, drone4]
+    drones = [Drone(i+1, initial_positions[i], initial_covariances[i], F, G, Q, H, R, pid_controller) for i in range(num_agents)]
     for drone in drones:
         drone.neighbors = [d for d in drones if d.id != drone.id]
 
-    fire_position = np.array([15, 15])  # Posizione fissa del fuoco
+    # Posizione fissa del fuoco (usato anche come centro della formazione)
+    fire_position = np.array([15, 15])  
+
+    # Offset formazione
+    formation_offsets = formation.calculate_formation_offsets(formation_type, num_agents, formation_radius)
 
     dt = 1.0  # Tempo tra i passi della simulazione
-    for k in range(30):  # Estensione del numero di iterazioni per avvicinarsi al fuoco
+    for k in range(num_iterations):  # Estensione del numero di iterazioni per avvicinarsi al fuoco
         for drone in drones:
             # Random movement control input
-            random_direction = np.random.uniform(-1, 1, 2)
-            u = np.hstack((random_direction, [0, 0]))
+            # random_direction = np.random.uniform(-1, 1, 2)
+            # u = np.hstack((random_direction, [0, 0]))
             # # Calcolo dell'errore e del controllo PID per avvicinarsi al fuoco
             # error = fire_position - drone.x[:2]
             # if np.linalg.norm(error) < 1.0:  # Dead zone of 1 unit around the target
             #     error = np.zeros(2)
             # u = np.hstack((drone.pid_controller.compute(error, dt), [0, 0]))  # Movimento verso il fuoco
 
-            # Componente di repulsione per evitare collisioni
-            repulsion = np.zeros(2)
-            for neighbor in drone.neighbors:
-                if np.linalg.norm(drone.x[:2] - neighbor.x[:2]) < 5:  # Soglia di repulsione
-                    repulsion += (drone.x[:2] - neighbor.x[:2]) / np.linalg.norm(drone.x[:2] - neighbor.x[:2])
-            u[:2] += repulsion * 0.1  # Scala la repulsione
-
+            # # Componente di repulsione per evitare collisioni
+            ## inserito in compute_control_input
+            # repulsion = np.zeros(2)
+            # for neighbor in drone.neighbors:
+            #     if np.linalg.norm(drone.x[:2] - neighbor.x[:2]) < 5:  # Soglia di repulsione
+            #         repulsion += (drone.x[:2] - neighbor.x[:2]) / np.linalg.norm(drone.x[:2] - neighbor.x[:2])
+            # u[:2] += repulsion * 0.1  # Scala la repulsione
+            u = formation.compute_control_input(drone, fire_position, formation_offsets, dt)
             drone.predict(u)
 
         #if k % 2 == 0:
         H_rel = np.block([[-H, H]])
         z = np.array([1, 1])  # Misurazione di esempio
         R_rel = 0.1 * np.eye(2)
-        sensing_range = 10  # Define the sensing range
         measurement_taken = False
 
         for i in range(len(drones)):
@@ -113,11 +115,11 @@ def simulate_fire_detection():
 
         if k == 25:
             print("Simulating communication loss for Drone 2")
-            drone2.active = False
+            drones[1].active = False
 
         if k == 35:
             print("Simulating recovery for Drone 2")
-            drone2.active = True
+            drones[1].active = True
 
     animate_simulation(drones, fire_position)
 
