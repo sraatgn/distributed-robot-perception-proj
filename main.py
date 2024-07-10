@@ -26,10 +26,19 @@ def simulate_fire_detection(
 
     measurements_history = []
 
+    # Inizializzazione droni (state x and covariance P)
+    initial_positions = [np.array([np.random.uniform(0, 30), np.random.uniform(0, 30)]) for _ in range(num_agents)]
+    initial_covariances = [0.1 * np.eye(num_agents) for _ in range(num_agents)]
+    
     # Parametri del modello
-    F = np.array([[1, 0, 0.1, 0], [0, 1, 0, 0.1], [0, 0, 1, 0], [0, 0, 0, 1]])
-    G = np.eye(4)
-    Q = 0.1 * np.eye(4)
+    #F = np.array([[1, 0, 0.1, 0], [0, 1, 0, 0.1], [0, 0, 1, 0], [0, 0, 0, 1]])
+    F = formation.initialize_state_transition_matrix(num_agents, initial_positions)
+    # for now we init G with the same func as F: the process noise affects the state components directly
+    #G = np.eye(4)
+    G = formation.initialize_state_transition_matrix(num_agents, initial_positions)
+    # assuming same noise variance for all drones
+    #Q = 0.1 * np.eye(4)
+    Q = formation.initialize_process_noise_covariance_matrix(num_agents)
     H = np.array([[1, 0, 0, 0], [0, 1, 0, 0]])
     R = 0.1 * np.eye(2)
 
@@ -42,9 +51,7 @@ def simulate_fire_detection(
     print(f"Best PID parameters: Kp={best_params[0]}, Ki={best_params[1]}, Kd={best_params[2]}, MSE={best_mse}")
     pid_controller = PIDController(*best_params)
 
-    # Inizializzazione droni (state x and covariance P)
-    initial_positions = [np.array([np.random.uniform(0, 30), np.random.uniform(0, 30), 0, 0]) for _ in range(num_agents)]
-    initial_covariances = [0.1 * np.eye(num_agents) for _ in range(num_agents)]
+
 
     drones = [Drone(i+1, initial_positions[i], initial_covariances[i], F, G, Q, H, R, pid_controller) for i in range(num_agents)]
     for drone in drones:
@@ -59,22 +66,6 @@ def simulate_fire_detection(
     dt = 1.0  # Tempo tra i passi della simulazione
     for k in range(num_iterations):  # Estensione del numero di iterazioni per avvicinarsi al fuoco
         for drone in drones:
-            # Random movement control input
-            # random_direction = np.random.uniform(-1, 1, 2)
-            # u = np.hstack((random_direction, [0, 0]))
-            # # Calcolo dell'errore e del controllo PID per avvicinarsi al fuoco
-            # error = fire_position - drone.x[:2]
-            # if np.linalg.norm(error) < 1.0:  # Dead zone of 1 unit around the target
-            #     error = np.zeros(2)
-            # u = np.hstack((drone.pid_controller.compute(error, dt), [0, 0]))  # Movimento verso il fuoco
-
-            # # Componente di repulsione per evitare collisioni
-            ## inserito in compute_control_input
-            # repulsion = np.zeros(2)
-            # for neighbor in drone.neighbors:
-            #     if np.linalg.norm(drone.x[:2] - neighbor.x[:2]) < 5:  # Soglia di repulsione
-            #         repulsion += (drone.x[:2] - neighbor.x[:2]) / np.linalg.norm(drone.x[:2] - neighbor.x[:2])
-            # u[:2] += repulsion * 0.1  # Scala la repulsione
             u = formation.compute_control_input(drone, fire_position, formation_offsets, dt)
             drone.predict(u)
 

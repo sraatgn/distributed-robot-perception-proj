@@ -1,5 +1,70 @@
 import numpy as np
 
+def initialize_state_transition_matrix(num_agents, state):
+    # Each drone has a state vector [x, y]
+    state_dim = state[0].shape[0]
+
+    # Initialize the block diagonal matrix F
+    F = np.zeros((num_agents * state_dim, num_agents * state_dim))
+    
+    for i in range(num_agents):
+        # The state transition matrix for a single drone
+        # the position remains unchanged (identity matrix) if no control inputs are applied.
+        Fi = np.array([
+            [1, 0],  # x' = x
+            [0, 1],  # y' = y
+        ])
+        
+        # Place Fi in the block diagonal position for the i-th drone
+        start_idx = i * state_dim
+        end_idx = start_idx + state_dim
+        F[start_idx:end_idx, start_idx:end_idx] = Fi
+
+    return F
+
+def initialize_process_noise_covariance_matrix(num_agents, default_variance=[0.1, 0.1], custom_variances=None):
+    ''' 
+    initializes Q as a block diagonal matrix with each block corresponding 
+    to a drone's process noise covariance matrix.
+
+    custom_variances: is an optional list where each element is a list of variances for each drone.
+         Example: custom_variances = [
+                        [0.1, 0.1],  # Drone 1
+                        [0.2, 0.2],  # Drone 2
+                        [0.3, 0.3],  # Drone 3
+                        [0.1, 0.1],  # Drone 4
+                        [0.2, 0.2]   # Drone 5
+                    ]
+    If not provided, default_variance is used assuming all drones have same variance
+    '''
+    # Each drone has a state vector [x, y]
+    state_dim = 2
+
+    # Initialize the block diagonal matrix Q
+    Q = np.zeros((num_agents * state_dim, num_agents * state_dim))
+    
+    for i in range(num_agents):
+        # Use custom variance if provided, otherwise use default variance
+        if custom_variances and i < len(custom_variances):
+            variance_x, variance_y = custom_variances[i]
+        else:
+            variance_x, variance_y = default_variance
+        
+        # The process noise covariance matrix for a single drone
+        Qi = np.array([
+            [variance_x, 0],  # Variance in x
+            [0, variance_y]   # Variance in y
+        ])
+        
+        # Place Qi in the block diagonal position for the i-th drone
+        start_idx = i * state_dim
+        end_idx = start_idx + state_dim
+        Q[start_idx:end_idx, start_idx:end_idx] = Qi
+
+    return Q
+
+## GET IN FORMATION FUNCTIONS
+
 def calculate_formation_offsets(formation, num_drones, radius):
     ''' Computes positions that the drones should aim to achieve in the formation '''
     if formation == 'circle':
