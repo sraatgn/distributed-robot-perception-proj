@@ -2,7 +2,7 @@ import numpy as np
 from scipy.linalg import sqrtm
 
 class Drone:
-    def __init__(self, id, x0, P0, F, G, Q, H, R, pid_controller):
+    def __init__(self, id, x0, P0, F, G, Q, H, H_rel, R, pid_controller):
         self.id = id
         self.x = x0  # Initial state
         self.P = P0  # Initial covariance
@@ -10,6 +10,7 @@ class Drone:
         self.G = G  # Control matrix
         self.Q = Q  # Process noise covariance
         self.H = H  # Observation matrix
+        self.H_rel = H_rel # Relative observations matrix
         self.R = R  # Measurement noise covariance
         self.U = np.eye(F.shape[0])  # Initial state transition matrix
         self.neighbors = []  # List of neighbors

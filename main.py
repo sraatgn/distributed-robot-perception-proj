@@ -28,7 +28,8 @@ def simulate_fire_detection(
 
     # Inizializzazione droni (state x and covariance P)
     initial_positions = [np.array([np.random.uniform(0, 30), np.random.uniform(0, 30)]) for _ in range(num_agents)]
-    initial_covariances = [0.1 * np.eye(num_agents) for _ in range(num_agents)]
+    state_dim = initial_positions[0].shape[0]
+    initial_covariances = [0.1 * np.eye(state_dim) for _ in range(num_agents)]
     
     # Parametri del modello
     #F = np.array([[1, 0, 0.1, 0], [0, 1, 0, 0.1], [0, 0, 1, 0], [0, 0, 0, 1]])
@@ -38,22 +39,35 @@ def simulate_fire_detection(
     G = formation.initialize_state_transition_matrix(num_agents, initial_positions)
     # assuming same noise variance for all drones
     #Q = 0.1 * np.eye(4)
-    Q = formation.initialize_process_noise_covariance_matrix(num_agents)
-    H = np.array([[1, 0, 0, 0], [0, 1, 0, 0]])
-    R = 0.1 * np.eye(2)
+    Q = formation.initialize_process_noise_covariance_matrix(num_agents, initial_positions)
+    # Initialize the relative observation matrix
+    H_rel = formation.initialize_relative_observation_matrix(num_agents, initial_positions)
+    H = np.array([[1, 0, 0, 0], [0, 1, 0, 0]]) # simple obs matrix for single pair of robots
+    #R = 0.1 * np.eye(2)
+    R = formation.initialize_measurement_noise_covariance_matrix(num_agents, measurement_noise_variance=0.1)
 
     # Parametri del PID Controller
     target = np.array([15, 15]) # fire
     Kp_values = np.arange(0.5, 1.5, 0.5)
     Ki_values = np.arange(0.05, 0.15, 0.05)
     Kd_values = np.arange(0.02, 0.07, 0.02)
-    best_params, best_mse = grid_search_pid(target, Kp_values, Ki_values, Kd_values)
+    best_params, best_mse = grid_search_pid(target, Kp_values, Ki_values, Kd_values, R)
     print(f"Best PID parameters: Kp={best_params[0]}, Ki={best_params[1]}, Kd={best_params[2]}, MSE={best_mse}")
     pid_controller = PIDController(*best_params)
 
+    drones = [Drone(
+        i+1, 
+        initial_positions[i], 
+        initial_covariances[i], 
+        formation.extract_submatrix(F, i, state_dim), # F_i
+        formation.extract_submatrix(G, i, state_dim), # G_i
+        formation.extract_submatrix(Q, i, state_dim), # Q_i
+        formation.extract_submatrix(H, i, state_dim), # H_i
+        H_rel,
+        formation.extract_submatrix(R, i, state_dim), # R_i
+        pid_controller) 
+        for i in range(num_agents)]
 
-
-    drones = [Drone(i+1, initial_positions[i], initial_covariances[i], F, G, Q, H, R, pid_controller) for i in range(num_agents)]
     for drone in drones:
         drone.neighbors = [d for d in drones if d.id != drone.id]
 
@@ -70,7 +84,7 @@ def simulate_fire_detection(
             drone.predict(u)
 
         #if k % 2 == 0:
-        H_rel = np.block([[-H, H]])
+        #H_rel = np.block([[-H, H]])
         z = np.array([1, 1])  # Misurazione di esempio
         R_rel = 0.1 * np.eye(2)
         measurement_taken = False
