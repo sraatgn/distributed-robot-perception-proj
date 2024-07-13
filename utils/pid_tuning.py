@@ -1,7 +1,7 @@
 import numpy as np
 from itertools import product
 from src.drone import Drone
-from src.pid_controller import  PIDController
+from src.pid_controller import PIDController
 
 def simulate_drone_with_pid(pid, target, num_steps=100, dt=0.1):
     F = np.array([[1, 0, 0.1, 0], [0, 1, 0, 0.1], [0, 0, 1, 0], [0, 0, 0, 1]])
@@ -40,3 +40,10 @@ def grid_search_pid(target, Kp_values, Ki_values, Kd_values, num_steps=100, dt=0
         print(f"Tested Kp={Kp}, Ki={Ki}, Kd={Kd}, MSE={mse}")
 
     return best_params, best_mse
+
+
+
+"""
+simulate_drone_with_pid: Simulates a drone controlled by a PID controller and calculates the Mean Squared Error (MSE) between the drone's position and a target position over a number of steps.
+grid_search_pid: Performs a grid search over specified ranges of PID parameters to find the combination that results in the lowest MSE.
+"""

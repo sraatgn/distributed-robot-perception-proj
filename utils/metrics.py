@@ -1,25 +1,33 @@
 import numpy as np
-from sklearn.metrics import precision_score, recall_score, f1_score
 
 def calculate_rmse(drones):
-    total_error = 0
-    count = 0
+    mse = 0
     for drone in drones:
-        for est_pos, true_pos in zip(drone.positions, drone.true_positions):
-            total_error += np.linalg.norm(est_pos - true_pos)**2
-            count += 1
-    rmse = np.sqrt(total_error / count)
-    return rmse
+        mse += np.sum((np.array(drone.positions) - np.array(drone.true_positions)) ** 2)
+    mse /= len(drones)
+    return np.sqrt(mse)
 
 def calculate_detection_metrics(drones, fire_position):
-    y_true = []
-    y_pred = []
+    true_positives = 0
+    false_positives = 0
+    false_negatives = 0
     for drone in drones:
-        for pos in drone.positions:
-            y_true.append(np.linalg.norm(pos - fire_position) < 5)
-            y_pred.append(drone.detect_fire(fire_position))
-    precision = precision_score(y_true, y_pred)
-    recall = recall_score(y_true, y_pred)
-    f1 = f1_score(y_true, y_pred)
+        if drone.detect_fire(fire_position):
+            if np.linalg.norm(fire_position - drone.x[:2]) < 5:
+                true_positives += 1
+            else:
+                false_positives += 1
+        else:
+            if np.linalg.norm(fire_position - drone.x[:2]) < 5:
+                false_negatives += 1
+    precision = true_positives / (true_positives + false_positives) if true_positives + false_positives > 0 else 0
+    recall = true_positives / (true_positives + false_negatives) if true_positives + false_negatives > 0 else 0
+    f1 = 2 * precision * recall / (precision + recall) if precision + recall > 0 else 0
     return precision, recall, f1
 
+
+"""
+Precision: The ratio of correctly detected fires (true positives) to all detected fires (true positives + false positives).
+Recall: The ratio of correctly detected fires (true positives) to all actual fires (true positives + false negatives).
+F1 Score: The harmonic mean of precision and recall, providing a single metric that balances both.
+"""
