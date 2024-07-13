@@ -30,20 +30,64 @@ def simulate_drone_with_pid(pid, target, num_steps=100, dt=0.1):
 def grid_search_pid(target, Kp_values, Ki_values, Kd_values, num_steps=100, dt=0.1):
     best_params = None
     best_mse = float('inf')
+    results = []
 
     for Kp, Ki, Kd in product(Kp_values, Ki_values, Kd_values):
         pid = PIDController(Kp, Ki, Kd)
         mse = simulate_drone_with_pid(pid, target, num_steps, dt)
+        results.append((Kp, Ki, Kd, mse))
         if mse < best_mse:
             best_mse = mse
             best_params = (Kp, Ki, Kd)
         print(f"Tested Kp={Kp}, Ki={Ki}, Kd={Kd}, MSE={mse}")
 
-    return best_params, best_mse
+    return best_params, best_mse, results
 
+def visualize_pid_tuning(results):
+    import matplotlib.pyplot as plt
 
+    Kp_values = sorted(set(result[0] for result in results))
+    Ki_values = sorted(set(result[1] for result in results))
+    Kd_values = sorted(set(result[2] for result in results))
 
-"""
-simulate_drone_with_pid: Simulates a drone controlled by a PID controller and calculates the Mean Squared Error (MSE) between the drone's position and a target position over a number of steps.
-grid_search_pid: Performs a grid search over specified ranges of PID parameters to find the combination that results in the lowest MSE.
-"""
+    Kp_mse = {Kp: np.full(len(Ki_values), np.nan) for Kp in Kp_values}
+    Ki_mse = {Ki: np.full(len(Kd_values), np.nan) for Ki in Ki_values}
+    Kd_mse = {Kd: np.full(len(Kp_values), np.nan) for Kd in Kd_values}
+
+    for Kp, Ki, Kd, mse in results:
+        Ki_index = Ki_values.index(Ki)
+        Kd_index = Kd_values.index(Kd)
+        Kp_index = Kp_values.index(Kp)
+
+        Kp_mse[Kp][Ki_index] = mse
+        Ki_mse[Ki][Kd_index] = mse
+        Kd_mse[Kd][Kp_index] = mse
+
+    plt.figure(figsize=(12, 8))
+
+    plt.subplot(3, 1, 1)
+    for Kp in Kp_values:
+        plt.plot(Ki_values, Kp_mse[Kp], label=f'Kp={Kp}')
+    plt.xlabel('Ki')
+    plt.ylabel('MSE')
+    plt.title('MSE vs Ki for different Kp values')
+    plt.legend()
+
+    plt.subplot(3, 1, 2)
+    for Ki in Ki_values:
+        plt.plot(Kd_values, Ki_mse[Ki], label=f'Ki={Ki}')
+    plt.xlabel('Kd')
+    plt.ylabel('MSE')
+    plt.title('MSE vs Kd for different Ki values')
+    plt.legend()
+
+    plt.subplot(3, 1, 3)
+    for Kd in Kd_values:
+        plt.plot(Kp_values, Kd_mse[Kd], label=f'Kd={Kd}')
+    plt.xlabel('Kp')
+    plt.ylabel('MSE')
+    plt.title('MSE vs Kp for different Kd values')
+    plt.legend()
+
+    plt.tight_layout()
+    plt.show()

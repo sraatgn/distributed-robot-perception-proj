@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 import numpy as np
 
-def animate_simulation(drones, fire_position, interim_master):
+def animate_simulation(drones, fire_position, interim_masters):
     fig, ax = plt.subplots()
     ax.set_xlim(0, 30)
     ax.set_ylim(0, 30)
@@ -34,8 +34,11 @@ def animate_simulation(drones, fire_position, interim_master):
                 line.set_data(positions[:, 0], positions[:, 1])
                 final_pos.set_offsets(positions[-1].reshape(1, 2))
 
-        if interim_master:
-            interim_master_marker.set_offsets(interim_master.positions[frame-1].reshape(1, 2))
+        if interim_masters and interim_masters[frame - 1] is not None:
+            interim_master_marker.set_offsets(interim_masters[frame - 1].positions[frame - 1].reshape(1, 2))
+            ax.annotate(f'Interim Master\nDrone {interim_masters[frame - 1].id}',
+                        xy=(interim_masters[frame - 1].positions[frame - 1][0], interim_masters[frame - 1].positions[frame - 1][1]),
+                        textcoords="offset points", xytext=(0,10), ha='center')
 
         return lines + final_positions + [fire_scatter, interim_master_marker]
 
