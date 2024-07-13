@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.linalg import sqrtm
+from IPython import embed
 
 class Drone:
     def __init__(self, id, x0, P0, F, G, Q, H, H_rel, R, pid_controller):
@@ -38,6 +39,7 @@ class Drone:
 
         # Combined state of both drones
         combined_state = np.concatenate((self.x, other_drone.x))
+        embed()
         # Relative measurement error
         ra = z - H_rel @ combined_state  # Innovation
 

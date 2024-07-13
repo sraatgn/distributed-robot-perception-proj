@@ -18,7 +18,7 @@ random.seed(123)
 
 def simulate_fire_detection(
     num_agents=4,
-    sensing_range=5,
+    sensing_range=10,
     num_iterations=30,
     formation_type='circle',
     formation_radius=5
@@ -51,7 +51,7 @@ def simulate_fire_detection(
     Kp_values = np.arange(0.5, 1.5, 0.5)
     Ki_values = np.arange(0.05, 0.15, 0.05)
     Kd_values = np.arange(0.02, 0.07, 0.02)
-    best_params, best_mse = grid_search_pid(target, Kp_values, Ki_values, Kd_values, R)
+    best_params, best_mse = grid_search_pid(target, Kp_values, Ki_values, Kd_values, num_iterations)
     print(f"Best PID parameters: Kp={best_params[0]}, Ki={best_params[1]}, Kd={best_params[2]}, MSE={best_mse}")
     pid_controller = PIDController(*best_params)
 
