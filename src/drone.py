@@ -12,7 +12,7 @@ class Drone:
         self.H = H  # Observation matrix
         self.R = R  # Measurement noise covariance
         self.U = np.eye(F.shape[0])  # Initial state transition matrix
-        self.neighbors = []  # List of neighbors
+        self.neighbors = []  # List of neighboring drones
         self.active = True  # Active state of the drone
         self.positions = [x0[:2]]  # Estimated positions for plotting
         self.true_positions = [x0[:2]]  # True positions for error calculation
@@ -29,7 +29,8 @@ class Drone:
         self.U = self.F @ self.U
         # Store positions for plotting
         self.positions.append(self.x[:2])
-        self.true_positions.append(self.x[:2] + np.random.normal(0, 0.1, size=2))  # Simulate true positions with noise
+        # Simulate true positions with noise for error calculation
+        self.true_positions.append(self.x[:2] + np.random.normal(0, 0.1, size=2))
 
     def update(self, z, H_rel, R_rel, other_drone):
         if not self.active or not other_drone.active:
@@ -37,8 +38,8 @@ class Drone:
 
         # Combined state of both drones
         combined_state = np.concatenate((self.x, other_drone.x))
-        # Relative measurement error
-        ra = z - H_rel @ combined_state  # Innovation
+        # Relative measurement error (innovation)
+        ra = z - H_rel @ combined_state
 
         # Combined covariance (block diagonal with covariances of both drones)
         P_combined = np.block([[self.P, np.zeros_like(self.P)], [np.zeros_like(self.P), other_drone.P]])
@@ -46,24 +47,26 @@ class Drone:
         # Innovation covariance
         Sab = R_rel + H_rel @ P_combined @ H_rel.T
 
+        # Ensure Sab is positive definite
         while np.any(np.linalg.eigvals(Sab) <= 0):
             Sab += np.eye(Sab.shape[0]) * 1e-6
 
+        # Inverse square root of Sab
         S_ab_inv_sqrt = np.linalg.inv(np.real(sqrtm(Sab)))
 
-        # Kalman Gain
+        # Kalman Gain for both drones
         Gamma_a = self.P @ H_rel[:, :self.P.shape[0]].T @ S_ab_inv_sqrt.T
         Gamma_b = other_drone.P @ H_rel[:, self.P.shape[0]:].T @ S_ab_inv_sqrt.T
 
-        # State update
+        # State update for both drones
         self.x = self.x + Gamma_a @ ra
         other_drone.x = other_drone.x + Gamma_b @ ra
 
-        # Covariance update
+        # Covariance update for both drones
         self.P = self.P - Gamma_a @ Sab @ Gamma_a.T
         other_drone.P = other_drone.P - Gamma_b @ Sab @ Gamma_b.T
 
-        # Prepare the update message
+        # Prepare the update message to broadcast
         update_message = {
             "a": self.id,
             "b": other_drone.id,
@@ -79,6 +82,7 @@ class Drone:
         self.broadcast_update(update_message)
 
     def broadcast_update(self, update_message):
+        # Send the update message to all neighbors except the ones involved in the update
         for neighbor in self.neighbors:
             if neighbor.id != update_message["a"] and neighbor.id != update_message["b"]:
                 neighbor.process_update(update_message)
@@ -91,18 +95,20 @@ class Drone:
         Sab = update_message["Sab"]
         S_ab_inv_sqrt = np.linalg.inv(np.real(sqrtm(Sab)))
 
-        # Calculate the update matrix for other drones
+        # Calculate the update matrix for the drone processing the update
         Gamma_j_a = self.P @ (Gamma_a @ S_ab_inv_sqrt)
         Gamma_j_b = self.P @ (Gamma_b @ S_ab_inv_sqrt)
         Gamma_j = Gamma_j_a - Gamma_j_b
 
-        # State and covariance update
+        # State update for the processing drone
         self.x = self.x + Gamma_j @ ra
+        # Covariance update for the processing drone
         self.P = self.P - Gamma_j @ Sab @ Gamma_j.T
 
     def check_sensor(self, z):
         if not self.active:
             return False
+        # Check for sensor failures (NaN or infinity values)
         if np.any(np.isnan(z)) or np.any(np.isinf(z)):
             print(f"Sensor failure detected on drone {self.id}")
             return False
@@ -111,5 +117,6 @@ class Drone:
     def detect_fire(self, fire_position):
         if not self.active:
             return False
+        # Detect if the fire is within a certain range (5 units) of the drone
         fire_detected = np.linalg.norm(fire_position - self.x[:2]) < 5
         return fire_detected

@@ -8,6 +8,8 @@ from utils.plotting import animate_simulation
 import matplotlib; matplotlib.use("TkAgg")
 from utils.pid_tuning import grid_search_pid
 from utils.pid_tuning import visualize_pid_tuning
+from utils.pid_tuning import box_plot_pid_tuning
+from utils.pid_tuning import line_plot_pid_tuning
 
 def form_circle_around_fire(drones, fire_position, radius=5):
     num_drones = len(drones)
@@ -54,6 +56,8 @@ def simulate_fire_detection(num_drones=9):
     print(f"Best PID parameters: Kp={best_params[0]}, Ki={best_params[1]}, Kd={best_params[2]} with MSE={best_mse}")
 
     visualize_pid_tuning(results)
+    box_plot_pid_tuning(results)
+    line_plot_pid_tuning(results)
 
     best_pid_controller = PIDController(*best_params)
 
