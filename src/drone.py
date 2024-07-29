@@ -16,7 +16,8 @@ class Drone:
         self.U = np.eye(F.shape[0])  # Initial state transition matrix
         self.neighbors = []  # List of neighbors
         self.active = True  # Active state of the drone
-        self.positions = [x0[:2]]  # Estimated positions for plotting
+        self.positions_pred = [x0[:2]]  # Estimated (after predictions) positions for plotting
+        self.positions_upt = [x0[:2]]  # Estimated (after update) positions for plotting
         self.true_positions = [x0[:2]]  # True positions for error calculation
         self.pid_controller = pid_controller  # PID controller
 
@@ -30,7 +31,7 @@ class Drone:
         # Update the state transition matrix
         self.U = self.F @ self.U
         # Store positions for plotting
-        self.positions.append(self.x[:2])
+        self.positions_pred.append(self.x[:2])
         self.true_positions.append(self.x[:2] + np.random.normal(0, 0.1, size=2))  # Simulate true positions with noise
 
     def update(self, z, H_rel, R_rel, other_drone):
@@ -39,7 +40,7 @@ class Drone:
 
         # Combined state of both drones
         combined_state = np.concatenate((self.x, other_drone.x))
-        embed()
+        
         # Relative measurement error
         ra = z - H_rel @ combined_state  # Innovation
 
@@ -102,6 +103,9 @@ class Drone:
         # State and covariance update
         self.x = self.x + Gamma_j @ ra
         self.P = self.P - Gamma_j @ Sab @ Gamma_j.T
+
+        # save for metrics
+        self.positions_upt.append(self.x[:2])
 
     def check_sensor(self, z):
         if not self.active:

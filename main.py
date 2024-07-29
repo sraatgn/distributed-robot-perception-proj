@@ -10,7 +10,7 @@ from IPython import embed
 from src.drone import Drone
 from src.pid_controller import PIDController
 from utils.metrics import calculate_rmse, calculate_detection_metrics
-from utils.plotting import plot_simulation, animate_simulation
+from utils.plotting import plot_simulation, animate_simulation, plot_rmse
 from utils.pid_tuning import simulate_drone_with_pid, grid_search_pid
 import utils.formation as formation
 
@@ -51,7 +51,7 @@ def simulate_fire_detection(
     Kp_values = np.arange(0.5, 1.5, 0.5)
     Ki_values = np.arange(0.05, 0.15, 0.05)
     Kd_values = np.arange(0.02, 0.07, 0.02)
-    best_params, best_mse = grid_search_pid(target, Kp_values, Ki_values, Kd_values, num_iterations)
+    best_params, best_mse = grid_search_pid(num_agents, initial_positions, target, Kp_values, Ki_values, Kd_values, num_iterations)
     print(f"Best PID parameters: Kp={best_params[0]}, Ki={best_params[1]}, Kd={best_params[2]}, MSE={best_mse}")
     pid_controller = PIDController(*best_params)
 
@@ -97,12 +97,12 @@ def simulate_fire_detection(
                     z = (drones[i].x[:2] + drones[j].x[:2]) / 2 
                     # Become interim master 
                     interim_master = drones[i]
-                    interim_master.update(z, H_rel, R_rel, drones[j])
+                    interim_master.update(z, H, R_rel, drones[j]) #H_rel
                     print(f"Update at step {k} between Drone {drones[i].id} and Drone {drones[j].id}")
                     # Update for all other drones
                     for drone in drones:
                         if drone.id != interim_master.id:
-                            interim_master.update(z, H_rel, R_rel, drone)
+                            interim_master.update(z, H, R_rel, drone)
                     measurement_taken = True
                     measurements_history.append(f"Measurement at step {k} between Drone {drones[i].id} and Drone {drones[j].id} ")
                     break
@@ -128,10 +128,12 @@ def simulate_fire_detection(
 
     animate_simulation(drones, fire_position)
 
-    rmse = calculate_rmse(drones)
-    precision, recall, f1 = calculate_detection_metrics(drones, fire_position)
+    rmse_pred = calculate_rmse(drones, num_iterations, after_update=False)
+    rmse_upt = calculate_rmse(drones, num_iterations, after_update=True)
+    plot_rmse(num_iterations, rmse_pred, rmse_upt)
+    #precision, recall, f1 = calculate_detection_metrics(drones, fire_position)
 
-    print(f"RMSE: {rmse}")
+    #print(f"RMSE: {rmse}")
     print(f"Precision: {precision}, Recall: {recall}, F1 Score: {f1}")
     print(f"PID best parameters selected: Kp={best_params[0]}, Ki={best_params[1]}, Kd={best_params[2]}, MSE={best_mse}")
     print("---------------------------------------")
@@ -139,5 +141,6 @@ def simulate_fire_detection(
         print(m)
 
 
+
 if __name__ == "__main__":
-    simulate_fire_detection()
+    simulate_fire_detection(num_agents=5)

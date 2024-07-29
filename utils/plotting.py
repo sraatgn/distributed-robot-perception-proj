@@ -5,7 +5,7 @@ import matplotlib.animation as animation
 def plot_simulation(drones, fire_position):
     plt.figure()
     for drone in drones:
-        positions = np.array(drone.positions)
+        positions = np.array(drone.positions_upt)
         plt.plot(positions[:, 0], positions[:, 1], label=f'Drone {drone.id}')
         plt.scatter(positions[-1, 0], positions[-1, 1], s=100)  # Mark the final position
 
@@ -43,7 +43,7 @@ def animate_simulation(drones, fire_position):
 
     def update(frame):
         for line, final_pos, drone in zip(lines, final_positions, drones):
-            positions = np.array(drone.positions[:frame])
+            positions = np.array(drone.positions_upt[:frame])
             if positions.size > 0:
                 line.set_data(positions[:, 0], positions[:, 1])
                 final_pos.set_offsets(positions[-1].reshape(1, 2))
@@ -51,8 +51,28 @@ def animate_simulation(drones, fire_position):
         return lines + final_positions + [fire_scatter]
 
     ani = animation.FuncAnimation(
-        fig, update, frames=range(1, max(len(drone.positions) for drone in drones) + 1),
+        fig, update, frames=range(1, max(len(drone.positions_upt) for drone in drones) + 1),
         init_func=init, blit=True, repeat=True, interval=500
     )
 
+    plt.show()
+
+## PLOT METRICS
+def plot_rmse(time_steps, rmse_prediction, rmse_update):
+    """
+    Plots the RMSE for prediction and update steps over time.
+
+    Parameters:
+        time_steps (list or np.array): Array of time steps.
+        rmse_prediction (np.array): Array of RMSE values after prediction.
+        rmse_update (np.array): Array of RMSE values after update.
+    """
+    plt.figure(figsize=(10, 6))
+    plt.plot(range(time_steps), np.array(rmse_prediction), label='RMSE After Prediction', color='blue')
+    plt.plot(range(time_steps), np.array(rmse_update), label='RMSE After Update', color='green')
+    plt.xlabel('Time Step')
+    plt.ylabel('RMSE')
+    plt.title('RMSE Over Time')
+    plt.legend()
+    plt.grid(True)
     plt.show()
