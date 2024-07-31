@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 def initialize_state_transition_matrix(num_agents, state):
     # Each drone has a state vector [x, y]
@@ -126,6 +127,7 @@ def calculate_formation_offsets(formation, num_drones, radius):
         ])
     else:
         raise ValueError(f"Unknown formation: {formation}")
+
     return offsets
 
 
@@ -141,14 +143,34 @@ def compute_control_input(drone, desired_centroid, formation_offsets, dt):
     #     relative_position = neighbor.x[:2] - drone.x[:2]
     #     u[:2] += drone.pid_controller.compute(relative_position, dt)
     
+    # compute control input using PID
     u[:2] += drone.pid_controller.compute(error, dt)
 
     # Repulsion component to avoid collisions
     repulsion = np.zeros(2)
     for neighbor in drone.neighbors:
         distance = np.linalg.norm(drone.x[:2] - neighbor.x[:2])
-        if distance < 5:  # Repulsion threshold
+        if distance < 2:  # Repulsion threshold
             repulsion += (drone.x[:2] - neighbor.x[:2]) / distance
     u[:2] += repulsion * 0.1  # Scale the repulsion
 
+    # Log control inputs and error
+    print(f"Drone {drone.id} - Error: {error}, Control Input: {u[:2]}")
+
+
     return u
+
+def plot_formation_offsets(desired_centroid, formation_offsets):
+    fig, ax = plt.subplots()
+    ax.set_xlim(0, 30)
+    ax.set_ylim(0, 30)
+    ax.set_xlabel('X Position')
+    ax.set_ylabel('Y Position')
+    ax.set_title('Desired Formation Offsets')
+    ax.grid()
+
+    for offset in formation_offsets:
+        position = desired_centroid + offset
+        ax.scatter(position[0], position[1], s=100)
+
+    plt.show()

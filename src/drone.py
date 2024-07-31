@@ -32,7 +32,9 @@ class Drone:
         self.U = self.F @ self.U
         # Store positions for plotting
         self.positions_pred.append(self.x[:2])
-        self.true_positions.append(self.x[:2] + np.random.normal(0, 0.1, size=2))  # Simulate true positions with noise
+
+        return self.x
+        
 
     def update(self, z, H_rel, R_rel, other_drone):
         if not self.active or not other_drone.active:
@@ -40,28 +42,29 @@ class Drone:
 
         # Combined state of both drones
         combined_state = np.concatenate((self.x, other_drone.x))
-        
+
+        ## INTERIM MASTER COMPUTATIONS
         # Relative measurement error
         ra = z - H_rel @ combined_state  # Innovation
-
         # Combined covariance (block diagonal with covariances of both drones)
         P_combined = np.block([[self.P, np.zeros_like(self.P)], [np.zeros_like(self.P), other_drone.P]])
-
         # Innovation covariance
         Sab = R_rel + H_rel @ P_combined @ H_rel.T
 
         while np.any(np.linalg.eigvals(Sab) <= 0):
             Sab += np.eye(Sab.shape[0]) * 1e-6
-
         S_ab_inv_sqrt = np.linalg.inv(np.real(sqrtm(Sab)))
 
         # Kalman Gain
         Gamma_a = self.P @ H_rel[:, :self.P.shape[0]].T @ S_ab_inv_sqrt.T
         Gamma_b = other_drone.P @ H_rel[:, self.P.shape[0]:].T @ S_ab_inv_sqrt.T
 
+        ## UPDATES
         # State update
         self.x = self.x + Gamma_a @ ra
         other_drone.x = other_drone.x + Gamma_b @ ra
+        # save for metrics
+        self.positions_upt.append(self.x[:2])
 
         # Covariance update
         self.P = self.P - Gamma_a @ Sab @ Gamma_a.T
@@ -84,7 +87,7 @@ class Drone:
 
     def broadcast_update(self, update_message):
         for neighbor in self.neighbors:
-            if neighbor.id != update_message["a"] and neighbor.id != update_message["b"]:
+            if neighbor.id != update_message["a"]: #and neighbor.id != update_message["b"]:
                 neighbor.process_update(update_message)
 
     def process_update(self, update_message):
