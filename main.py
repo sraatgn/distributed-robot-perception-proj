@@ -9,7 +9,7 @@ from IPython import embed
 
 from src.drone import Drone
 from src.pid_controller import PIDController
-from utils.metrics import calculate_rmse, calculate_detection_metrics
+from utils.metrics import calculate_rmse, calculate_detection_metrics, calculate_nmse
 from utils.plotting import plot_simulation, animate_simulation, plot_rmse
 from utils.pid_tuning import simulate_drone_with_pid, grid_search_pid
 import utils.formation as formation
@@ -140,7 +140,6 @@ def simulate_fire_detection(
     plot_rmse(num_iterations, rmse_pred, rmse_upt)
     #precision, recall, f1 = calculate_detection_metrics(drones, fire_position)
 
-    #print(f"RMSE: {rmse}")
     #print(f"Precision: {precision}, Recall: {recall}, F1 Score: {f1}")
     print(f"PID best parameters selected: Kp={best_params[0]}, Ki={best_params[1]}, Kd={best_params[2]}, MSE={best_mse}")
     print("---------------------------------------")

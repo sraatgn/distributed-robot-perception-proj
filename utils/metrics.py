@@ -44,6 +44,50 @@ def calculate_rmse(drones, num_timesteps, after_update=True):
     
     return rmse
 
+def calculate_nmse(drones, num_timesteps, after_update=True):
+    """
+    Computes the NMSE (Normalized Mean Squared Error) between the true states and the estimated states.
+
+    Returns:
+        list of NMSE values for each time step.
+    """
+    nmse = []
+
+    for t in range(num_timesteps):
+        total_error = 0
+        total_variance = 0
+        num_valid_drones = 0
+        
+        for drone in drones:
+            true_states_len = len(drone.true_positions)
+            estimated_states_len = len(drone.positions_upt if after_update else drone.positions_pred)
+            
+            if t < true_states_len and t < estimated_states_len:
+                true_state = drone.true_positions[t]
+                estimated_state = drone.positions_upt[t] if after_update else drone.positions_pred[t]
+                
+                # Calculate squared error
+                squared_error = np.linalg.norm(estimated_state - true_state) ** 2
+                total_error += squared_error
+                
+                # Calculate variance of the true states
+                total_variance += np.var(drone.true_positions, axis=0).mean()
+                
+                num_valid_drones += 1
+            else:
+                print(f"Warning: Drone {drone.id} does not have data for time step {t}")
+        
+        if num_valid_drones > 0 and total_variance > 0:
+            # Calculate mean squared error
+            mse = total_error / num_valid_drones
+            # Normalize by variance
+            nmse_value = mse / (total_variance / num_valid_drones)
+            nmse.append(nmse_value)
+        else:
+            nmse.append(None)  # No valid data for this time step or zero variance
+    
+    return nmse
+
 
 def calculate_detection_metrics(drones, fire_position):
     y_true = []
