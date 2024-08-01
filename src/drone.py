@@ -7,18 +7,19 @@ class Drone:
         self.id = id
         self.x = x0  # Initial state
         self.P = P0  # Initial covariance
+        self.U = np.eye(F.shape[0])  # Phi (time-varying local variable)
         self.F = F  # State transition matrix
         self.G = G  # Control matrix
         self.Q = Q  # Process noise covariance
         self.H = H  # Observation matrix
         self.H_rel = H_rel # Relative observations matrix
         self.R = R  # Measurement noise covariance
-        self.U = np.eye(F.shape[0])  # Initial state transition matrix
         self.neighbors = []  # List of neighbors
         self.active = True  # Active state of the drone
         self.positions_pred = [x0[:2]]  # Estimated (after predictions) positions for plotting
         self.positions_upt = [x0[:2]]  # Estimated (after update) positions for plotting
         self.true_positions = [x0[:2]]  # True positions for error calculation
+        self.kalmangains = [] # For saving kalman gain
         self.pid_controller = pid_controller  # PID controller
 
     def predict(self, u):
@@ -28,7 +29,7 @@ class Drone:
         self.x = self.F @ self.x + u
         # Covariance propagation
         self.P = self.F @ self.P @ self.F.T + self.G @ self.Q @ self.G.T
-        # Update the state transition matrix
+        # Update Phi
         self.U = self.F @ self.U
         # Store positions for plotting
         self.positions_pred.append(self.x[:2])
@@ -55,7 +56,7 @@ class Drone:
             Sab += np.eye(Sab.shape[0]) * 1e-6
         S_ab_inv_sqrt = np.linalg.inv(np.real(sqrtm(Sab)))
 
-        # Kalman Gain
+        # Intermediate matrices 
         Gamma_a = self.P @ H_rel[:, :self.P.shape[0]].T @ S_ab_inv_sqrt.T
         Gamma_b = other_drone.P @ H_rel[:, self.P.shape[0]:].T @ S_ab_inv_sqrt.T
 
@@ -63,8 +64,6 @@ class Drone:
         # State update
         self.x = self.x + Gamma_a @ ra
         other_drone.x = other_drone.x + Gamma_b @ ra
-        # save for metrics
-        self.positions_upt.append(self.x[:2])
 
         # Covariance update
         self.P = self.P - Gamma_a @ Sab @ Gamma_a.T
@@ -82,6 +81,14 @@ class Drone:
             "Sab": Sab
         }
 
+        # save updated state (IM) for metrics
+        self.positions_upt.append(self.x[:2])
+
+        ## KALMAN GAIN
+        K_a = self.U @ Gamma_a
+        # save Kalman gain
+        self.kalmangains.append(K_a)
+    
         # Broadcast the update message to other drones
         self.broadcast_update(update_message)
 
@@ -98,7 +105,7 @@ class Drone:
         Sab = update_message["Sab"]
         S_ab_inv_sqrt = np.linalg.inv(np.real(sqrtm(Sab)))
 
-        # Calculate the update matrix for other drones
+        # Calculate the intermediate matrix for other drones
         Gamma_j_a = self.P @ (Gamma_a @ S_ab_inv_sqrt)
         Gamma_j_b = self.P @ (Gamma_b @ S_ab_inv_sqrt)
         Gamma_j = Gamma_j_a - Gamma_j_b
@@ -109,6 +116,11 @@ class Drone:
 
         # save for metrics
         self.positions_upt.append(self.x[:2])
+
+        ## KALMAN GAIN
+        K_i = self.U @ Gamma_j
+        # save kalman gain
+        self.kalmangains.append(K_i)
 
     def check_sensor(self, z):
         if not self.active:

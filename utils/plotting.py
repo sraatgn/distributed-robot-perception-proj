@@ -132,3 +132,18 @@ def plot_rmse(time_steps, rmse_prediction, rmse_update):
     plt.legend()
     plt.grid(True)
     plt.show()
+
+
+def plot_kalman_gain(drones):
+    for drone in drones:
+        gains = np.array(drone.kalmangains)
+        plt.figure(figsize=(12, 6))
+        for i in range(gains.shape[1]):
+            for j in range(gains.shape[2]):
+                plt.plot(gains[:, i, j], label=f'K[{i},{j}]')
+        plt.title(f'Kalman Gain Evolution for Drone {drone.id}')
+        plt.xlabel('Time Step')
+        plt.ylabel('Kalman Gain Value')
+        plt.legend()
+        plt.grid(True)
+        plt.show()

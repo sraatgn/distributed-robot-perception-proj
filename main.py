@@ -10,7 +10,7 @@ from IPython import embed
 from src.drone import Drone
 from src.pid_controller import PIDController
 from utils.metrics import calculate_rmse, calculate_detection_metrics, calculate_nmse
-from utils.plotting import plot_simulation, animate_simulation, plot_rmse
+from utils.plotting import plot_simulation, animate_simulation, plot_rmse, plot_kalman_gain
 from utils.pid_tuning import simulate_drone_with_pid, grid_search_pid
 import utils.formation as formation
 from utils.measurements import simulate_measurement
@@ -27,6 +27,7 @@ def simulate_fire_detection(
 
     assert num_agents >= 2, f"Sir, this is a distributed system. Why would you use {num_agents} drone(s)?"
     
+    fire_position = np.array([15, 15])
     measurements_history = []
 
     # Inizializzazione droni (state x and covariance P)
@@ -50,7 +51,6 @@ def simulate_fire_detection(
     R = formation.initialize_measurement_noise_covariance_matrix(num_agents, measurement_noise_variance=0.1)
 
     # Parametri del PID Controller
-    fire_position = np.array([15, 15]) # fire
     Kp_values = np.arange(0.5, 1.5, 0.25)
     Ki_values = np.arange(0.05, 0.15, 0.05)
     Kd_values = np.arange(0.02, 0.07, 0.02)
@@ -94,6 +94,9 @@ def simulate_fire_detection(
         measurement_taken = False
 
         for i in range(len(drones)):
+            if measurement_taken:
+                break # no more than one interim master per iteration
+
             for j in range(i + 1, len(drones)):
                 distance = np.linalg.norm(drones[i].x[:2] - drones[j].x[:2])
                 if distance < sensing_range:
@@ -114,8 +117,6 @@ def simulate_fire_detection(
                     measurement_taken = True
                     measurements_history.append(f"Measurement at step {k} between Drone {drones[i].id} and Drone {drones[j].id} ")
                     break
-            if measurement_taken:
-                break # no more than one interim master per iteration
 
         if measurement_taken == False:
             for drone in drones:
@@ -138,6 +139,7 @@ def simulate_fire_detection(
     rmse_pred = calculate_rmse(drones, num_iterations, after_update=False)
     rmse_upt = calculate_rmse(drones, num_iterations, after_update=True)
     plot_rmse(num_iterations, rmse_pred, rmse_upt)
+    plot_kalman_gain(drones)
     #precision, recall, f1 = calculate_detection_metrics(drones, fire_position)
 
     #print(f"Precision: {precision}, Recall: {recall}, F1 Score: {f1}")
@@ -149,4 +151,4 @@ def simulate_fire_detection(
 
 
 if __name__ == "__main__":
-    simulate_fire_detection(num_agents=6)
+    simulate_fire_detection(num_agents=4)
