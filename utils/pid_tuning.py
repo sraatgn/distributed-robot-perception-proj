@@ -3,6 +3,8 @@ from itertools import product
 from src.drone import Drone
 from src.pid_controller import  PIDController
 from IPython import embed
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 import utils.formation as formation
 
@@ -52,15 +54,97 @@ def simulate_drone_with_pid(num_agents, initial_positions, pid, target, num_step
 def grid_search_pid(num_agents, initial_positions, target, Kp_values, Ki_values, Kd_values, num_steps=100, dt=0.1):
     best_params = None
     best_mse = float('inf')
+    results = []
 
     for Kp in Kp_values:
         for Ki in Ki_values:
             for Kd in Kd_values:
                 pid = PIDController(Kp, Ki, Kd)
                 mse = simulate_drone_with_pid(num_agents, initial_positions, pid, target, num_steps, dt)
+                results.append((Kp, Ki, Kd, mse))
                 if mse < best_mse:
                     best_mse = mse
                     best_params = (Kp, Ki, Kd)
 
-    return best_params, best_mse
+    return best_params, best_mse, results
+
+## PLOTS
+def plot_scatter(results):
+    Kp_vals = [result[0] for result in results]
+    Ki_vals = [result[1] for result in results]
+    Kd_vals = [result[2] for result in results]
+    mse_vals = [result[3] for result in results]
+
+    fig, ax = plt.subplots(1, 3, figsize=(18, 6))
+
+    sc1 = ax[0].scatter(Kp_vals, mse_vals, c=Kd_vals, cmap='viridis')
+    ax[0].set_xlabel('Kp')
+    ax[0].set_ylabel('MSE')
+    ax[0].set_title('MSE vs Kp')
+    fig.colorbar(sc1, ax=ax[0], label='Kd')
+
+    sc2 = ax[1].scatter(Ki_vals, mse_vals, c=Kd_vals, cmap='viridis')
+    ax[1].set_xlabel('Ki')
+    ax[1].set_ylabel('MSE')
+    ax[1].set_title('MSE vs Ki')
+    fig.colorbar(sc2, ax=ax[1], label='Kd')
+
+    sc3 = ax[2].scatter(Kd_vals, mse_vals, c=Ki_vals, cmap='viridis')
+    ax[2].set_xlabel('Kd')
+    ax[2].set_ylabel('MSE')
+    ax[2].set_title('MSE vs Kd')
+    fig.colorbar(sc3, ax=ax[2], label='Ki')
+
+    plt.show()
+
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib import cm
+
+def plot_3d_surface(results, Kp_values, Ki_values, Kd_values):
+    fig = plt.figure(figsize=(12, 10))
+    ax = fig.add_subplot(111, projection='3d')
+    
+    Kp_vals = []
+    Ki_vals = []
+    Kd_vals = []
+    mse_vals = []
+
+    for result in results:
+        Kp_vals.append(result[0])
+        Ki_vals.append(result[1])
+        Kd_vals.append(result[2])
+        mse_vals.append(result[3])
+
+    sc = ax.scatter(Kp_vals, Ki_vals, Kd_vals, c=mse_vals, cmap=cm.viridis)
+    ax.set_xlabel('Kp')
+    ax.set_ylabel('Ki')
+    ax.set_zlabel('Kd')
+    plt.colorbar(sc, ax=ax, label='MSE')
+    plt.title('3D Surface plot of PID parameter tuning')
+    plt.show()
+
+def plot_heatmaps(results, Kp_values, Ki_values, Kd_values):
+    for Kd in Kd_values:
+        mse_matrix = np.zeros((len(Kp_values), len(Ki_values)))
+
+        for Kp_idx, Kp in enumerate(Kp_values):
+            for Ki_idx, Ki in enumerate(Ki_values):
+                for result in results:
+                    if result[0] == Kp and result[1] == Ki and result[2] == Kd:
+                        mse_matrix[Kp_idx, Ki_idx] = result[3]
+
+        plt.figure(figsize=(10, 8))
+        sns.heatmap(mse_matrix, xticklabels=Ki_values, yticklabels=Kp_values, annot=True, fmt=".4g", cmap="viridis")
+        plt.title(f'Heatmap for Kd = {Kd}')
+        plt.xlabel('Ki')
+        plt.ylabel('Kp')
+        plt.show()
+
+
+
+
+
+
+
+
 

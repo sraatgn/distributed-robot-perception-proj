@@ -15,6 +15,7 @@ from IPython import embed
 def calculate_rmse(drones, num_timesteps, after_update=True):
     """
     Computes the RMSE between the true states and the estimated states.
+    Average over all drones for each time step
 
     Returns:
         list of RMSE values for each time step.
@@ -42,6 +43,13 @@ def calculate_rmse(drones, num_timesteps, after_update=True):
         else:
             rmse.append(None)  # No valid data for this time step
     
+    return rmse
+
+def compute_rmse(true_positions, estimated_positions):
+    true_positions = np.array(true_positions)
+    estimated_positions = np.array(estimated_positions)
+    mse = np.mean((true_positions - estimated_positions) ** 2)
+    rmse = np.sqrt(mse)
     return rmse
 
 def calculate_nmse(drones, num_timesteps, after_update=True):

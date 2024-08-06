@@ -112,6 +112,24 @@ def animate_simulation_expected_traj(drones, fire_position):
 
     plt.show()
 
+def plot_trajectories(drones, fire_position):
+    for drone in drones:
+        true_positions = np.array(drone.true_positions)
+        pred_positions = np.array(drone.positions_pred)
+        updated_positions = np.array(drone.positions_upt)
+        plt.plot(true_positions[:, 0], true_positions[:, 1], label=f'True Traj Drone {drone.id}')
+        plt.plot(pred_positions[:, 0], pred_positions[:, 1], '--', label=f'Pred Traj Drone {drone.id}')
+        plt.plot(updated_positions[:, 0], updated_positions[:, 1], ':', label=f'Updated Traj Drone {drone.id}')
+    plt.scatter(fire_position[0], fire_position[1], marker='x', color='red', label='Fire Position')
+    plt.xlabel('X position')
+    plt.ylabel('Y position')
+    plt.legend()
+    plt.title('Trajectories of Drones')
+    plt.grid(True)
+    plt.xlim(0, 30)  
+    plt.ylim(0, 30)  
+    plt.show()
+
 
 ## PLOT METRICS
 def plot_rmse(time_steps, rmse_prediction, rmse_update):
@@ -147,3 +165,41 @@ def plot_kalman_gain(drones):
         plt.legend()
         plt.grid(True)
         plt.show()
+
+def plot_x_variance_over_time(drones):
+    plt.figure(figsize=(10, 5))
+    for drone in drones:
+        x_variances = drone.x_variances
+        plt.plot(x_variances, label=f'Drone {drone.id}')
+    plt.xlabel('Time Step')
+    plt.ylabel('Variance of x Position')
+    plt.title('Variance of x Position Over Time')
+    plt.legend()
+    plt.grid(True)
+    #plt.ylim(0, 0.5)  # Adjust this limit based on the expected range of variances
+    plt.show()
+
+def plot_x_variances_over_time(drones):
+    color_map = plt.get_cmap('tab10', len(drones))  # 'tab10' can generate up to 10 distinct colors
+    colors = [color_map(i) for i in range(len(drones))]
+
+    for i, drone in enumerate(drones):
+        x_variances_pred = drone.x_variances_pred
+        x_variances_upt = drone.x_variances_upt
+        
+        time_steps_pred = range(len(x_variances_pred))
+        time_steps_upt = range(len(x_variances_upt))
+        
+        color = colors[i % len(colors)]
+        
+        plt.plot(time_steps_pred, x_variances_pred, linestyle='--', color=color, label=f'Pred Variance Drone {drone.id}')
+        plt.plot(time_steps_upt, x_variances_upt, linestyle='-', color=color, label=f'Upt Variance Drone {drone.id}')
+    
+    plt.xlabel('Time Step')
+    plt.ylabel('Variance of x Position')
+    plt.title('Variance of x Position Over Time (Prediction and Update)')
+    plt.legend(loc='center left', bbox_to_anchor=(1, 0.5), ncol=1)
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+

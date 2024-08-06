@@ -9,18 +9,19 @@ from IPython import embed
 
 from src.drone import Drone
 from src.pid_controller import PIDController
-from utils.metrics import calculate_rmse, calculate_detection_metrics, calculate_nmse
-from utils.plotting import plot_simulation, animate_simulation, plot_rmse, plot_kalman_gain
-from utils.pid_tuning import simulate_drone_with_pid, grid_search_pid
+from utils.metrics import calculate_rmse, calculate_detection_metrics, calculate_nmse, compute_rmse
+import utils.plotting as plots 
+from utils.pid_tuning import simulate_drone_with_pid, grid_search_pid, plot_scatter, plot_3d_surface, plot_heatmaps
 import utils.formation as formation
 from utils.measurements import simulate_measurement
 
-random.seed(123)
+#random.seed(123)
 
 def simulate_fire_detection(
     num_agents=4,
     sensing_range=15,
     num_iterations=50,
+    dt = 1.0,                   # Tempo tra i passi della simulazione
     formation_type='circle',
     formation_radius=5
 ):
@@ -36,28 +37,21 @@ def simulate_fire_detection(
     initial_covariances = [0.1 * np.eye(state_dim) for _ in range(num_agents)]
     
     # Parametri del modello
-    #F = np.array([[1, 0, 0.1, 0], [0, 1, 0, 0.1], [0, 0, 1, 0], [0, 0, 0, 1]])
     F = formation.initialize_state_transition_matrix(num_agents, initial_positions)
     # for now we init G with the same func as F: the process noise affects the state components directly
-    #G = np.eye(4)
     G = formation.initialize_state_transition_matrix(num_agents, initial_positions)
-    # assuming same noise variance for all drones
-    #Q = 0.1 * np.eye(4)
-    Q = formation.initialize_process_noise_covariance_matrix(num_agents, initial_positions)
-    # Initialize the relative observation matrix
+    Q = formation.initialize_process_noise_covariance_matrix(num_agents, initial_positions, default_variance=[0.1, 0.5])
     H_rel = formation.initialize_relative_observation_matrix(num_agents, initial_positions)
     H = np.array([[1, 0, 0, 0], [0, 1, 0, 0]]) # simple obs matrix for single pair of robots
-    #R = 0.1 * np.eye(2)
     R = formation.initialize_measurement_noise_covariance_matrix(num_agents, measurement_noise_variance=0.1)
 
     # Parametri del PID Controller
     Kp_values = np.arange(0.5, 1.5, 0.25)
     Ki_values = np.arange(0.05, 0.15, 0.05)
     Kd_values = np.arange(0.02, 0.07, 0.02)
-    best_params, best_mse = grid_search_pid(num_agents, initial_positions, fire_position, Kp_values, Ki_values, Kd_values, num_iterations)
+    best_params, best_mse, results = grid_search_pid(num_agents, initial_positions, fire_position, Kp_values, Ki_values, Kd_values, num_iterations)
     print(f"Best PID parameters: Kp={best_params[0]}, Ki={best_params[1]}, Kd={best_params[2]}, MSE={best_mse}")
     pid_controller = PIDController(*best_params)
-
 
     # Inizializzazione droni
     drones = [Drone(
@@ -79,7 +73,6 @@ def simulate_fire_detection(
     # Offset formazione
     formation_offsets = formation.calculate_formation_offsets(formation_type, num_agents, formation_radius)
 
-    dt = 1.0  # Tempo tra i passi della simulazione
     for k in range(num_iterations):  
         for drone in drones:
             u = formation.compute_control_input(drone, fire_position, formation_offsets, dt)
@@ -134,21 +127,69 @@ def simulate_fire_detection(
             print("Simulating recovery for Drone 2")
             drones[1].active = True
 
-    animate_simulation(drones, fire_position)
+    plots.animate_simulation(drones, fire_position)
 
-    rmse_pred = calculate_rmse(drones, num_iterations, after_update=False)
-    rmse_upt = calculate_rmse(drones, num_iterations, after_update=True)
-    plot_rmse(num_iterations, rmse_pred, rmse_upt)
-    plot_kalman_gain(drones)
-    #precision, recall, f1 = calculate_detection_metrics(drones, fire_position)
+    # print(f"PID best parameters selected: Kp={best_params[0]}, Ki={best_params[1]}, Kd={best_params[2]}, MSE={best_mse}")
+    # print("---------------------------------------")
+    # for m in measurements_history:
+    #     print(m)
 
-    #print(f"Precision: {precision}, Recall: {recall}, F1 Score: {f1}")
-    print(f"PID best parameters selected: Kp={best_params[0]}, Ki={best_params[1]}, Kd={best_params[2]}, MSE={best_mse}")
-    print("---------------------------------------")
-    for m in measurements_history:
-        print(m)
+    return drones
 
 
 
 if __name__ == "__main__":
-    simulate_fire_detection(num_agents=4)
+
+    drones = simulate_fire_detection()
+
+    ## PLOTS & EVALUATION
+    # rmse_pred = calculate_rmse(drones, num_iterations, after_update=False)
+    # rmse_upt = calculate_rmse(drones, num_iterations, after_update=True)
+    # plot_rmse(num_iterations, rmse_pred, rmse_upt)
+
+    # plot_kalman_gain(drones)
+
+    plots.plot_x_variances_over_time(drones) 
+
+    ##########################
+    ## CODE FOR RUNNING MULTIPLE SIMULATIONS AND PLOTTING RMSE FOR ONE DRONE
+    # # Number of simulations to run
+    # NUM_SIM = 1
+    # NUM_ITER = 50
+
+    # # Arrays to store RMSEs for each simulation
+    # rmse_pred_all = np.zeros((NUM_SIM, NUM_ITER))
+    # rmse_update_all = np.zeros((NUM_SIM, NUM_ITER))
+
+    # for sim in range(NUM_SIM):
+    #     # Simulate and return list of drones
+    #     drones = simulate_fire_detection(num_iterations=NUM_ITER)
+    #     plot_trajectories(drones, fire_position=np.array([15, 15]))
+
+    #     # Build lists for drone 1 for evaluation
+    #     for k in range(NUM_ITER):
+    #         true_positions = [drone.true_positions[k] for drone in drones if drone.id == 1]
+    #         pred_positions = [drone.positions_pred[k] for drone in drones if drone.id == 1]
+    #         updated_positions = [drone.positions_upt[k] for drone in drones if drone.id == 1]
+            
+    #         if true_positions and pred_positions:
+    #             rmse_pred_all[sim, k] = compute_rmse(true_positions, pred_positions)
+            
+    #         if true_positions and updated_positions:
+    #             rmse_update_all[sim, k] = compute_rmse(true_positions, updated_positions)
+
+    #     # Compute mean RMSE over all simulations
+    # rmse_pred_mean = np.mean(rmse_pred_all, axis=0)
+    # rmse_update_mean = np.mean(rmse_update_all, axis=0)
+
+    # # Plot the results
+    # plt.figure(figsize=(10, 5))
+    # plt.plot(rmse_pred_mean, label='RMSE after Prediction')
+    # plt.plot(rmse_update_mean, label='RMSE after Update')
+    # plt.xlabel('Time Step')
+    # plt.ylabel('RMSE')
+    # plt.title('RMSE of Drone Position Estimation')
+    # plt.legend()
+    # plt.grid(True)
+    # plt.show()
+

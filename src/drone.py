@@ -9,18 +9,23 @@ class Drone:
         self.P = P0  # Initial covariance
         self.U = np.eye(F.shape[0])  # Phi (time-varying local variable)
         self.F = F  # State transition matrix
-        self.G = G  # Control matrix
+        self.G = G  # Process noise jacobian matrix
         self.Q = Q  # Process noise covariance
         self.H = H  # Observation matrix
         self.H_rel = H_rel # Relative observations matrix
         self.R = R  # Measurement noise covariance
+        self.pid_controller = pid_controller  # PID controller
         self.neighbors = []  # List of neighbors
         self.active = True  # Active state of the drone
+        # For evaluation
         self.positions_pred = [x0[:2]]  # Estimated (after predictions) positions for plotting
-        self.positions_upt = [x0[:2]]  # Estimated (after update) positions for plotting
+        self.positions_upt = [x0[:2]]   # Estimated (after update) positions for plotting
         self.true_positions = [x0[:2]]  # True positions for error calculation
-        self.kalmangains = [] # For saving kalman gain
-        self.pid_controller = pid_controller  # PID controller
+        self.kalmangains = []           # For saving kalman gain
+        #self.x_variances = [self.P[0, 0]]  # Store initial variance
+        self.x_variances_pred = []  # Store variance after prediction
+        self.x_variances_upt = [self.P[0, 0]]  # Store initial variance after update (initial)
+
 
     def predict(self, u):
         if not self.active:
@@ -33,6 +38,7 @@ class Drone:
         self.U = self.F @ self.U
         # Store positions for plotting
         self.positions_pred.append(self.x[:2])
+        self.x_variances_pred.append(self.P[0, 0])  
 
         return self.x
         
@@ -83,6 +89,7 @@ class Drone:
 
         # save updated state (IM) for metrics
         self.positions_upt.append(self.x[:2])
+        self.x_variances_upt.append(self.P[0, 0])
 
         ## KALMAN GAIN
         K_a = self.U @ Gamma_a
@@ -116,6 +123,7 @@ class Drone:
 
         # save for metrics
         self.positions_upt.append(self.x[:2])
+        self.x_variances_upt.append(self.P[0, 0]) 
 
         ## KALMAN GAIN
         K_i = self.U @ Gamma_j
