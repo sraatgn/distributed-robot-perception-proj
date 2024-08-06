@@ -167,10 +167,12 @@ def plot_formation_offsets(desired_centroid, formation_offsets):
     ax.set_xlabel('X Position')
     ax.set_ylabel('Y Position')
     ax.set_title('Desired Formation Offsets')
-    ax.grid()
+    ax.grid(zorder=0)
 
-    for offset in formation_offsets:
+    ax.scatter(desired_centroid[0], desired_centroid[1], marker='^', color='red', label='Fire', zorder=5)
+    for i, offset in enumerate(formation_offsets):
         position = desired_centroid + offset
-        ax.scatter(position[0], position[1], s=100)
+        ax.scatter(position[0], position[1], s=100, label=f'Drone {i+1}', zorder=5)
 
+    ax.legend()
     plt.show()
