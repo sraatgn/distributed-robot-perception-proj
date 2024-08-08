@@ -69,17 +69,19 @@ def calculate_nmse(drones, num_timesteps, after_update=True):
         for drone in drones:
             true_states_len = len(drone.true_positions)
             estimated_states_len = len(drone.positions_upt if after_update else drone.positions_pred)
+            covariances_len = len(drone.covariances_upt if after_update else drone.covariances_pred)
             
-            if t < true_states_len and t < estimated_states_len:
+            if t < true_states_len and t < estimated_states_len and t < covariances_len:
                 true_state = drone.true_positions[t]
                 estimated_state = drone.positions_upt[t] if after_update else drone.positions_pred[t]
+                covariance_matrix = drone.covariances_upt[t] if after_update else drone.covariances_pred[t]
                 
                 # Calculate squared error
                 squared_error = np.linalg.norm(estimated_state - true_state) ** 2
                 total_error += squared_error
                 
-                # Calculate variance of the true states
-                total_variance += np.var(drone.true_positions, axis=0).mean()
+                # Use the trace of the covariance matrix as the total variance
+                total_variance += np.trace(covariance_matrix)
                 
                 num_valid_drones += 1
             else:
@@ -88,13 +90,14 @@ def calculate_nmse(drones, num_timesteps, after_update=True):
         if num_valid_drones > 0 and total_variance > 0:
             # Calculate mean squared error
             mse = total_error / num_valid_drones
-            # Normalize by variance
+            # Normalize by total variance
             nmse_value = mse / (total_variance / num_valid_drones)
             nmse.append(nmse_value)
         else:
             nmse.append(None)  # No valid data for this time step or zero variance
     
     return nmse
+
 
 
 def calculate_detection_metrics(drones, fire_position):

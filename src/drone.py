@@ -3,8 +3,9 @@ from scipy.linalg import sqrtm
 from IPython import embed
 
 class Drone:
-    def __init__(self, id, x0, P0, F, G, Q, H, H_rel, R, pid_controller):
+    def __init__(self, id, sensing_range, x0, P0, F, G, Q, H, H_rel, R, pid_controller):
         self.id = id
+        self.sensing_range = sensing_range
         self.x = x0  # Initial state
         self.P = P0  # Initial covariance
         self.U = np.eye(F.shape[0])  # Phi (time-varying local variable)
@@ -22,9 +23,8 @@ class Drone:
         self.positions_upt = [x0[:2]]   # Estimated (after update) positions for plotting
         self.true_positions = [x0[:2]]  # True positions for error calculation
         self.kalmangains = []           # For saving kalman gain
-        #self.x_variances = [self.P[0, 0]]  # Store initial variance
-        self.x_variances_pred = []  # Store variance after prediction
-        self.x_variances_upt = [self.P[0, 0]]  # Store initial variance after update (initial)
+        self.covariances_pred = []
+        self.covariances_upt = [self.P]
 
 
     def predict(self, u):
@@ -38,7 +38,7 @@ class Drone:
         self.U = self.F @ self.U
         # Store positions for plotting
         self.positions_pred.append(self.x[:2])
-        self.x_variances_pred.append(self.P[0, 0])  
+        self.covariances_pred.append(self.P)
 
         return self.x
         
@@ -89,7 +89,7 @@ class Drone:
 
         # save updated state (IM) for metrics
         self.positions_upt.append(self.x[:2])
-        self.x_variances_upt.append(self.P[0, 0])
+        self.covariances_upt.append(self.P)
 
         ## KALMAN GAIN
         K_a = self.U @ Gamma_a
@@ -123,7 +123,7 @@ class Drone:
 
         # save for metrics
         self.positions_upt.append(self.x[:2])
-        self.x_variances_upt.append(self.P[0, 0]) 
+        self.covariances_upt.append(self.P)
 
         ## KALMAN GAIN
         K_i = self.U @ Gamma_j
@@ -141,5 +141,5 @@ class Drone:
     def detect_fire(self, fire_position):
         if not self.active:
             return False
-        fire_detected = np.linalg.norm(fire_position - self.x[:2]) < 5
+        fire_detected = np.linalg.norm(fire_position - self.x[:2]) < self.sensing_range
         return fire_detected

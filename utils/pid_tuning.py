@@ -8,7 +8,7 @@ import seaborn as sns
 
 import utils.formation as formation
 
-def simulate_drone_with_pid(num_agents, initial_positions, pid, target, num_steps=100, dt=0.1, H_rel=None):
+def simulate_drone_with_pid(num_agents, initial_positions, pid, target, num_steps=100, sensing_range=10, dt=0.1, H_rel=None):
     #F = np.array([[1, 0], [0, 1]])
     F = formation.initialize_state_transition_matrix(num_agents, initial_positions)
     #G = np.eye(2)
@@ -29,7 +29,7 @@ def simulate_drone_with_pid(num_agents, initial_positions, pid, target, num_step
         H_rel = np.array([[-1, 0, 1, 0], [0, -1, 0, 1]])  # Simplified example
 
     # consider first drone (arbitrary)
-    drone = Drone(1, x0, P0, 
+    drone = Drone(1, sensing_range, x0, P0, 
         formation.extract_submatrix(F, 0, state_dim), # F_i
         formation.extract_submatrix(G, 0, state_dim), # G_i
         formation.extract_submatrix(Q, 0, state_dim), # Q_i
@@ -51,7 +51,7 @@ def simulate_drone_with_pid(num_agents, initial_positions, pid, target, num_step
     mse /= num_steps
     return mse
 
-def grid_search_pid(num_agents, initial_positions, target, Kp_values, Ki_values, Kd_values, num_steps=100, dt=0.1):
+def grid_search_pid(num_agents, initial_positions, target, Kp_values, Ki_values, Kd_values, num_steps=100, sensing_range=10, dt=0.1):
     best_params = None
     best_mse = float('inf')
     results = []
@@ -60,7 +60,7 @@ def grid_search_pid(num_agents, initial_positions, target, Kp_values, Ki_values,
         for Ki in Ki_values:
             for Kd in Kd_values:
                 pid = PIDController(Kp, Ki, Kd)
-                mse = simulate_drone_with_pid(num_agents, initial_positions, pid, target, num_steps, dt)
+                mse = simulate_drone_with_pid(num_agents, initial_positions, pid, target, num_steps, sensing_range, dt)
                 results.append((Kp, Ki, Kd, mse))
                 if mse < best_mse:
                     best_mse = mse

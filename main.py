@@ -15,21 +15,21 @@ from utils.pid_tuning import simulate_drone_with_pid, grid_search_pid, plot_scat
 import utils.formation as formation
 from utils.measurements import simulate_measurement
 
-#random.seed(123)
+random.seed(74)
 
 def simulate_fire_detection(
     num_agents=4,
-    sensing_range=15,
-    num_iterations=50,
+    sensing_range=10,
+    num_iterations=100,
     dt = 1.0,                   # Tempo tra i passi della simulazione
     formation_type='circle',
-    formation_radius=5
+    formation_radius=5, 
+    fire_position = np.array([15, 15]),
+    sim_communication_loss=False
 ):
 
     assert num_agents >= 2, f"Sir, this is a distributed system. Why would you use {num_agents} drone(s)?"
-    
-    fire_position = np.array([15, 15])
-    measurements_history = []
+    measurements_history = [None]
 
     # Inizializzazione droni (state x and covariance P)
     initial_positions = [np.array([np.random.uniform(0, 30), np.random.uniform(0, 30)]) for _ in range(num_agents)]
@@ -49,13 +49,14 @@ def simulate_fire_detection(
     Kp_values = np.arange(0.5, 1.5, 0.25)
     Ki_values = np.arange(0.05, 0.15, 0.05)
     Kd_values = np.arange(0.02, 0.07, 0.02)
-    best_params, best_mse, results = grid_search_pid(num_agents, initial_positions, fire_position, Kp_values, Ki_values, Kd_values, num_iterations)
+    best_params, best_mse, results = grid_search_pid(num_agents, initial_positions, fire_position, Kp_values, Ki_values, Kd_values, num_iterations, sensing_range, dt)
     print(f"Best PID parameters: Kp={best_params[0]}, Ki={best_params[1]}, Kd={best_params[2]}, MSE={best_mse}")
     pid_controller = PIDController(*best_params)
 
     # Inizializzazione droni
     drones = [Drone(
         i+1, 
+        sensing_range,
         initial_positions[i], 
         initial_covariances[i], 
         formation.extract_submatrix(F, i, state_dim), # F_i
@@ -74,41 +75,42 @@ def simulate_fire_detection(
     formation_offsets = formation.calculate_formation_offsets(formation_type, num_agents, formation_radius)
 
     for k in range(num_iterations):  
-        for drone in drones:
+        drones_shf = list(drones) # duplicate for shuffling (I want to keep the original for now)
+        random.shuffle(drones_shf)
+
+        for drone in drones_shf:
             u = formation.compute_control_input(drone, fire_position, formation_offsets, dt)
             # Simulate true positions with noise (for RMSE)
-            #drone.true_positions.append(drone.x[:2] + np.random.normal(0, 0.1, size=2))  
-            true_pos = np.dot(drone.F, drone.true_positions[-1]) + np.dot(drone.G, u)
-            drone.true_positions.append(true_pos)
+            drone.true_positions.append(drone.x[:2] + np.random.normal(0, 0.2, size=2))  
+            #true_pos = np.dot(drone.F, drone.true_positions[-1]) + np.dot(drone.G, u)
+            #drone.true_positions.append(true_pos)
 
             ## PREDICTION
             pred_state = drone.predict(u)
         
         measurement_taken = False
 
-        for i in range(len(drones)):
+        #for i in range(len(drones)):
+        for drone_i in drones_shf:
             if measurement_taken:
                 break # no more than one interim master per iteration
 
-            for j in range(i + 1, len(drones)):
-                distance = np.linalg.norm(drones[i].x[:2] - drones[j].x[:2])
+            #for j in range(i + 1, len(drones)):
+            # create list without i-th drone to iterate on pairs
+            other_drones = [drone for drone in drones_shf if drone.id != drone_i.id]
+            for drone_j in other_drones:
+                distance = np.linalg.norm(drone_i.x[:2] - drone_j.x[:2])
                 if distance < sensing_range:
-                    # Example measurement as the midpoint
-                    #z = (drones[i].x[:2] + drones[j].x[:2]) / 2 
                     # Relative measurement: eucledian distance 
-                    z = simulate_measurement(drones[i].x, drones[j].x, drones[i].R)
+                    z = simulate_measurement(drone_i.x, drone_j.x, drone_i.R)
                     # Become interim master 
-                    interim_master = drones[i]
-                    interim_master.update(z, H, interim_master.R, drones[j]) #H_rel
-                    print(f"Relative measurement at step {k} between Drone {drones[i].id} and Drone {drones[j].id}")
-
-                    ## NOT NEEDED BC THE UPDATE FOR OTHER DRONES IS CALLED ABOVE IN interim_master.update()
-                    # # Update for all other drones
-                    # for drone in drones:
-                    #     if drone.id != interim_master.id:
-                    #         drone.update(z, H, drone.R, interim_master)
+                    interim_master = drone_i
+                    interim_master.update(z, H, interim_master.R, drone_j) #H_rel
+                    # update for other drones is called in interim_master.update()
+                    print(f"Relative measurement at step {k} between Drone {drone_i.id} and Drone {drone_j.id}")
+                    
                     measurement_taken = True
-                    measurements_history.append(f"Measurement at step {k} between Drone {drones[i].id} and Drone {drones[j].id} ")
+                    measurements_history.append((drone_i.id, drone_j.id))
                     break
 
         if measurement_taken == False:
@@ -119,77 +121,39 @@ def simulate_fire_detection(
             if drone.detect_fire(fire_position):
                 print(f"Fire detected by Drone {drone.id} at position {drone.x[:2]}")
 
-        if k == 25:
-            print("Simulating communication loss for Drone 2")
-            drones[1].active = False
+        ## COMMUNICATION LOSS
+        if sim_communication_loss:
+            if k == 25:
+                print("Simulating communication loss for Drone 3")
+                drones[2].active = False
+            if k == 35:
+                print("Simulating recovery for Drone 3")
+                drones[2].active = True
+    
+    #plots.animate_simulation(drones, fire_position)
+    plots.animate_simulation_expected_traj(drones, fire_position)
+    # plots.plot_trajectories(drones, fire_position, plot_pred=False)
+    # plots.plot_trajectories(drones, fire_position)
 
-        if k == 35:
-            print("Simulating recovery for Drone 2")
-            drones[1].active = True
+    print(f"PID best parameters selected: Kp={best_params[0]}, Ki={best_params[1]}, Kd={best_params[2]}, MSE={best_mse}")
+    print("---------------------------------------")
 
-    plots.animate_simulation(drones, fire_position)
-
-    # print(f"PID best parameters selected: Kp={best_params[0]}, Ki={best_params[1]}, Kd={best_params[2]}, MSE={best_mse}")
-    # print("---------------------------------------")
-    # for m in measurements_history:
-    #     print(m)
-
-    return drones
+    return drones, num_iterations
 
 
 
 if __name__ == "__main__":
 
-    drones = simulate_fire_detection()
+    drones, num_iterations = simulate_fire_detection()
 
     ## PLOTS & EVALUATION
-    # rmse_pred = calculate_rmse(drones, num_iterations, after_update=False)
-    # rmse_upt = calculate_rmse(drones, num_iterations, after_update=True)
-    # plot_rmse(num_iterations, rmse_pred, rmse_upt)
+    rmse_pred = calculate_rmse(drones, num_iterations, after_update=False)
+    rmse_upt = calculate_rmse(drones, num_iterations, after_update=True)
+    plots.plot_error(num_iterations, rmse_pred, rmse_upt)
 
-    # plot_kalman_gain(drones)
+    plots.plot_kalman_gain(drones)
 
-    plots.plot_x_variances_over_time(drones) 
+    plots.plot_variances_over_time(drones) 
+    plots.plot_variances_over_time(drones, loc='y') 
 
-    ##########################
-    ## CODE FOR RUNNING MULTIPLE SIMULATIONS AND PLOTTING RMSE FOR ONE DRONE
-    # # Number of simulations to run
-    # NUM_SIM = 1
-    # NUM_ITER = 50
-
-    # # Arrays to store RMSEs for each simulation
-    # rmse_pred_all = np.zeros((NUM_SIM, NUM_ITER))
-    # rmse_update_all = np.zeros((NUM_SIM, NUM_ITER))
-
-    # for sim in range(NUM_SIM):
-    #     # Simulate and return list of drones
-    #     drones = simulate_fire_detection(num_iterations=NUM_ITER)
-    #     plot_trajectories(drones, fire_position=np.array([15, 15]))
-
-    #     # Build lists for drone 1 for evaluation
-    #     for k in range(NUM_ITER):
-    #         true_positions = [drone.true_positions[k] for drone in drones if drone.id == 1]
-    #         pred_positions = [drone.positions_pred[k] for drone in drones if drone.id == 1]
-    #         updated_positions = [drone.positions_upt[k] for drone in drones if drone.id == 1]
-            
-    #         if true_positions and pred_positions:
-    #             rmse_pred_all[sim, k] = compute_rmse(true_positions, pred_positions)
-            
-    #         if true_positions and updated_positions:
-    #             rmse_update_all[sim, k] = compute_rmse(true_positions, updated_positions)
-
-    #     # Compute mean RMSE over all simulations
-    # rmse_pred_mean = np.mean(rmse_pred_all, axis=0)
-    # rmse_update_mean = np.mean(rmse_update_all, axis=0)
-
-    # # Plot the results
-    # plt.figure(figsize=(10, 5))
-    # plt.plot(rmse_pred_mean, label='RMSE after Prediction')
-    # plt.plot(rmse_update_mean, label='RMSE after Update')
-    # plt.xlabel('Time Step')
-    # plt.ylabel('RMSE')
-    # plt.title('RMSE of Drone Position Estimation')
-    # plt.legend()
-    # plt.grid(True)
-    # plt.show()
 
