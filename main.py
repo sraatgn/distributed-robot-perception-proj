@@ -15,7 +15,6 @@ from utils.pid_tuning import simulate_drone_with_pid, grid_search_pid, plot_scat
 import utils.formation as formation
 from utils.measurements import simulate_measurement
 
-random.seed(74)
 
 def simulate_fire_detection(
     num_agents=4,
@@ -25,11 +24,15 @@ def simulate_fire_detection(
     formation_type='circle',
     formation_radius=5, 
     fire_position = np.array([15, 15]),
-    sim_communication_loss=False
+    sim_communication_loss=False, 
+    random_iter=False
 ):
 
+    random.seed(74)  # Ensure reproducibility
+    np.random.seed(74)  # Seed for numpy random functions
+
     assert num_agents >= 2, f"Sir, this is a distributed system. Why would you use {num_agents} drone(s)?"
-    measurements_history = [None]
+    measurements_history = []
 
     # Inizializzazione droni (state x and covariance P)
     initial_positions = [np.array([np.random.uniform(0, 30), np.random.uniform(0, 30)]) for _ in range(num_agents)]
@@ -76,7 +79,9 @@ def simulate_fire_detection(
 
     for k in range(num_iterations):  
         drones_shf = list(drones) # duplicate for shuffling (I want to keep the original for now)
-        random.shuffle(drones_shf)
+        if random_iter:
+            random.shuffle(drones_shf)
+        # else iterate on the ordered list (copy)
 
         for drone in drones_shf:
             u = formation.compute_control_input(drone, fire_position, formation_offsets, dt)
@@ -132,8 +137,8 @@ def simulate_fire_detection(
     
     #plots.animate_simulation(drones, fire_position)
     plots.animate_simulation_expected_traj(drones, fire_position)
-    # plots.plot_trajectories(drones, fire_position, plot_pred=False)
-    # plots.plot_trajectories(drones, fire_position)
+    #plots.plot_trajectories(drones, fire_position, plot_pred=False)
+    plots.plot_trajectories(drones, fire_position)
 
     print(f"PID best parameters selected: Kp={best_params[0]}, Ki={best_params[1]}, Kd={best_params[2]}, MSE={best_mse}")
     print("---------------------------------------")
@@ -144,7 +149,7 @@ def simulate_fire_detection(
 
 if __name__ == "__main__":
 
-    drones, num_iterations = simulate_fire_detection()
+    drones, num_iterations = simulate_fire_detection(random_iter=True)
 
     ## PLOTS & EVALUATION
     rmse_pred = calculate_rmse(drones, num_iterations, after_update=False)
