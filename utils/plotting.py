@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.patches import Circle
+import networkx as nx
 
 
 def plot_simulation(drones, fire_position):
@@ -222,4 +223,34 @@ def plot_variances_over_time(drones, loc='x'):
     plt.grid(True)
     plt.tight_layout()
     plt.show()
+
+def visualize_measurement_network(measurements_history, num_drones):
+    # Create a directed graph
+    G = nx.DiGraph()
+    # Dictionary to count how many times each drone made a measurement
+    a_count = {i+1: 0 for i in range(num_drones)}
+    b_count = {i+1: 0 for i in range(num_drones)}
+
+    # Add nodes for each drone
+    for i in range(num_drones):
+        G.add_node(i+1, label=f'Drone {i+1}')
+
+    # Add edges based on the measurement history
+    for (a, b) in measurements_history:
+        if a <= num_drones and b <= num_drones:
+            G.add_edge(a, b, label=f'{a} -> {b}')
+            a_count[a] += 1
+            b_count[b] += 1
+
+    # Draw the graph
+    pos = nx.spring_layout(G)  # Position nodes using Fruchterman-Reingold force-directed algorithm
+    labels = {
+        i: f'Drone {i}\nMade: {a_count[i]}\nReceived: {b_count[i]}' 
+        for i in range(1, num_drones + 1)
+    }
+    nx.draw(G, pos, labels=labels, node_size=2000, node_color='skyblue', arrows=True, arrowsize=20, font_size=9, font_color='black')
+
+    plt.title('Measurement Network')
+    plt.show()
+
 
