@@ -101,7 +101,7 @@ class Drone:
 
     def broadcast_update(self, update_message):
         for neighbor in self.neighbors:
-            if neighbor.id != update_message["a"]: #and neighbor.id != update_message["b"]:
+            if neighbor.id != update_message["a"]: 
                 neighbor.process_update(update_message)
 
     def process_update(self, update_message):

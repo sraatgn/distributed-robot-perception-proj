@@ -24,7 +24,7 @@ def plot_simulation(drones, fire_position):
 def animate_simulation(drones, fire_position):
     fig, ax = plt.subplots()
     ax.set_xlim(0, 30)  # Adjust according to the simulation boundaries
-    ax.set_ylim(0, 30)  # Adjust according to the simulation boundaries
+    ax.set_ylim(0, 30)  
     ax.set_xlabel('X Position')
     ax.set_ylabel('Y Position')
     ax.set_title('Drone Fire Detection Simulation')
@@ -65,8 +65,8 @@ def animate_simulation_expected_traj(drones, fire_position):
     """ Plot animated simulation with estimated and desired trajectories """
 
     fig, ax = plt.subplots()
-    ax.set_xlim(0, 30)  # Adjust according to the simulation boundaries
-    ax.set_ylim(0, 30)  # Adjust according to the simulation boundaries
+    ax.set_xlim(0, 30)  
+    ax.set_ylim(0, 30)  
     ax.set_xlabel('X Position')
     ax.set_ylabel('Y Position')
     ax.set_title('Drone Fire Monitoring Simulation')
@@ -192,7 +192,6 @@ def plot_x_variance_over_time(drones):
     plt.title('Variance of x Position Over Time')
     plt.legend()
     plt.grid(True)
-    #plt.ylim(0, 0.5)  # Adjust this limit based on the expected range of variances
     plt.show()
 
 def plot_variances_over_time(drones, loc='x'):

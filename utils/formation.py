@@ -1,6 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+## INITIALIZATION FUNCTIONS 
+
 def initialize_state_transition_matrix(num_agents, state):
     # Each drone has a state vector [x, y]
     state_dim = state[0].shape[0]
@@ -137,11 +139,7 @@ def compute_control_input(drone, desired_centroid, formation_offsets, dt):
     desired_position = desired_centroid + formation_offsets[idx]
     error = desired_position - drone.x[:2]
 
-    u = np.zeros(drone.x.shape[0]) #drone.x.shape[0] is the state dim
-    
-    # for neighbor in drone.neighbors:
-    #     relative_position = neighbor.x[:2] - drone.x[:2]
-    #     u[:2] += drone.pid_controller.compute(relative_position, dt)
+    u = np.zeros(drone.x.shape[0]) 
     
     # compute control input using PID
     u[:2] += drone.pid_controller.compute(error, dt)
@@ -156,7 +154,6 @@ def compute_control_input(drone, desired_centroid, formation_offsets, dt):
 
     # Log control inputs and error
     print(f"Drone {drone.id} - Error: {error}, Control Input: {u[:2]}")
-
 
     return u
 

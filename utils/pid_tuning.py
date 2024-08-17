@@ -9,15 +9,10 @@ import seaborn as sns
 import utils.formation as formation
 
 def simulate_drone_with_pid(num_agents, initial_positions, pid, target, num_steps=100, sensing_range=10, dt=0.1, H_rel=None):
-    #F = np.array([[1, 0], [0, 1]])
     F = formation.initialize_state_transition_matrix(num_agents, initial_positions)
-    #G = np.eye(2)
     G = formation.initialize_state_transition_matrix(num_agents, initial_positions)
-    #Q = 0.1 * np.eye(2)
     Q = formation.initialize_process_noise_covariance_matrix(num_agents, initial_positions)
-    #H = np.array([[1, 0], [0, 1]])
     H = np.array([[1, 0, 0, 0], [0, 1, 0, 0]]) # simple obs matrix for single pair of robots
-    #R = 0.1 * np.eye(2)
     R = formation.initialize_measurement_noise_covariance_matrix(num_agents, measurement_noise_variance=0.1)
 
     x0 = initial_positions[0]  # Initialize the first drone's position

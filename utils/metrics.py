@@ -2,16 +2,6 @@ import numpy as np
 from sklearn.metrics import precision_score, recall_score, f1_score
 from IPython import embed
 
-# def calculate_rmse(drones):
-#     total_error = 0
-#     count = 0
-#     for drone in drones:
-#         for est_pos, true_pos in zip(drone.positions, drone.true_positions):
-#             total_error += np.linalg.norm(est_pos - true_pos)**2
-#             count += 1
-#     rmse = np.sqrt(total_error / count)
-#     return rmse
-
 def calculate_rmse(drones, num_timesteps, after_update=True):
     """
     Computes the RMSE between the true states and the estimated states.
@@ -97,7 +87,6 @@ def calculate_nmse(drones, num_timesteps, after_update=True):
             nmse.append(None)  # No valid data for this time step or zero variance
     
     return nmse
-
 
 
 def calculate_detection_metrics(drones, fire_position):
